@@ -1,0 +1,58 @@
+---
+export const prerender = false;
+
+import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client/core";
+
+const client = new ApolloClient({
+  link: new HttpLink({ uri: import.meta.env.PUBLIC_SHOP_API_URL, fetch }),
+  cache: new InMemoryCache(),
+});
+
+const slug = Astro.params.slug as string;
+
+const { data } = await client.query({
+  query: gql`
+    query GetProductBySlug($slug: String!) {
+      product(slug: $slug) {
+        id
+        name
+        description
+        featuredAsset { preview }
+        assets { preview }
+        variants { id name priceWithTax currencyCode }
+      }
+    }
+  `,
+  variables: { slug },
+});
+
+const p = data?.product;
+if (!p) throw Astro.redirect(`/`);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{p.name} — Ventio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 960px; }
+      .thumbs { display: flex; gap: .5rem; margin: .5rem 0 1rem; }
+      .thumbs img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; }
+      .price { font-size: 1.1rem; font-weight: 600; margin: .5rem 0 1rem; }
+      a { color: #0b5; }
+    </style>
+  </head>
+  <body>
+    <a href="/">← Back</a>
+    <h1>{p.name}</h1>
+    <img src={p.featuredAsset?.preview} alt={p.name} style="max-width:100%; border-radius: 12px; border: 1px solid #eee;" />
+    <div class="thumbs">
+      {p.assets?.map((a:any) => <img src={a.preview} alt="" loading="lazy" />)}
+    </div>
+    <p class="price">
+      {p.variants?.[0] ? `${(p.variants[0].priceWithTax/100).toFixed(2)} ${p.variants[0].currencyCode}` : 'Price on request'}
+    </p>
+    <p>{p.description ?? ''}</p>
+  </body>
+</html>

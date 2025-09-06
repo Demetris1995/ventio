@@ -1,0 +1,51 @@
+---
+import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client/core";
+
+const client = new ApolloClient({
+  link: new HttpLink({ uri: import.meta.env.PUBLIC_SHOP_API_URL, fetch }),
+  cache: new InMemoryCache(),
+});
+
+const { data } = await client.query({
+  query: gql`
+    query GetProducts {
+      products(options: { take: 12 }) {
+        items { id slug name description featuredAsset { preview } }
+      }
+    }
+  `
+});
+const products = data?.products?.items ?? [];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ventio — Storefront</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+      .card { border: 1px solid #eee; border-radius: 12px; padding: 1rem; text-decoration: none; color: inherit; }
+      .img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; background: #fafafa; }
+      .name { font-weight: 600; margin: .5rem 0 .25rem; }
+      .desc { color: #555; font-size: .9rem; line-height: 1.3; max-height: 3.2em; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <h1>Ventio</h1>
+    {products.length === 0 ? (
+      <p>No products yet. Add one in Vendure Admin → Catalog → Products.</p>
+    ) : (
+      <div class="grid">
+        {products.map((p:any) => (
+          <a class="card" href={`/p/${p.slug}`}>
+            <img class="img" src={p.featuredAsset?.preview ?? (import.meta.env.PUBLIC_ASSETS_URL + '/placeholder.png')} alt={p.name} loading="lazy" />
+            <div class="name">{p.name}</div>
+            <div class="desc">{p.description ?? ''}</div>
+          </a>
+        ))}
+      </div>
+    )}
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "ventio",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -w run compose:up && pnpm -w --parallel -r run dev",
+    "compose:up": "docker compose -f docker-compose.yml up -d",
+    "compose:down": "docker compose -f docker-compose.yml down -v"
+  },
+  "dependencies": {
+    "bcrypt": "npm:bcryptjs@^3.0.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "bcrypt": "npm:bcryptjs@^3.0.2"
+    }
+  }
+}

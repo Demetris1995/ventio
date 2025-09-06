@@ -1,0 +1,35 @@
+{
+  "name": "vendure",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --watch src --exec ts-node src/index.ts",
+    "seed": "ts-node src/seed.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.15.1",
+  "dependencies": {
+    "@vendure/admin-ui-plugin": "^3.4.1",
+    "@vendure/asset-server-plugin": "^3.4.1",
+    "@vendure/core": "^3.4.1",
+    "@vendure/email-plugin": "^3.4.1",
+    "dotenv": "^17.2.2",
+    "mime-types": "^3.0.1",
+    "minio": "^8.0.5",
+    "multer": "^2.0.2",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.26"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@types/pg": "^8.15.5",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

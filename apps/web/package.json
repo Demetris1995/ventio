@@ -1,0 +1,17 @@
+{
+  "name": "@ventio/web",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev --port 4321",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@apollo/client": "^4.0.4",
+    "astro": "^5.13.5",
+    "graphql": "^16.11.0"
+  }
+}
