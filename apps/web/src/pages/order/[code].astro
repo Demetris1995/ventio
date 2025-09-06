@@ -1,0 +1,144 @@
+---
+export const prerender = false;
+
+import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client/core";
+
+const client = new ApolloClient({
+  link: new HttpLink({
+    uri: import.meta.env.PUBLIC_SHOP_API_URL,
+    fetch,
+    fetchOptions: { credentials: "include" },
+  }),
+  cache: new InMemoryCache(),
+});
+
+const code = Astro.params.code;
+
+const { data } = await client.query({
+  query: gql`
+    query OrderByCode($code: String!) {
+      orderByCode(code: $code) {
+        id
+        code
+        state
+        currencyCode
+        totalQuantity
+        subTotalWithTax
+        shippingWithTax
+        totalWithTax
+        customer {
+          firstName
+          lastName
+          emailAddress
+        }
+        lines {
+          id
+          quantity
+          discountedLinePriceWithTax
+          productVariant {
+            id
+            name
+            sku
+          }
+        }
+        shippingAddress {
+          fullName
+          streetLine1
+          city
+          postalCode
+          countryCode
+        }
+      }
+    }
+  `,
+  variables: { code },
+  fetchPolicy: "no-cache",
+});
+
+const order = data?.orderByCode ?? null;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Order {code} — Ventio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      .wrap { max-width: 900px; margin: 0 auto; }
+      .muted { color:#666; }
+      .grid { display:grid; grid-template-columns: 2fr 1fr; gap:1.25rem; }
+      .card { border:1px solid #eee; border-radius:12px; padding:1rem; }
+      .line { display:flex; justify-content:space-between; padding:.5rem 0; border-bottom:1px dashed #eee; }
+      .line:last-child { border-bottom:0; }
+      .total { font-weight:700; }
+      .badge { display:inline-block; padding:.2rem .5rem; border-radius:999px; background:#f5f5f5; font-size:.8rem; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <a href="/">← Back to store</a>
+      <h1>Order <span class="badge">{code}</span></h1>
+
+      {!order ? (
+        <p class="muted">Order not found or you don’t have access.</p>
+      ) : (
+        <div class="grid">
+          <div class="card">
+            <h2 style="margin-top:0;">Items</h2>
+            {order.lines.map((l:any) => (
+              <div class="line">
+                <div>
+                  <div style="font-weight:600">{l.productVariant?.name}</div>
+                  <div class="muted">Qty {l.quantity}</div>
+                </div>
+                <div>{(l.discountedLinePriceWithTax/100).toFixed(2)} {order.currencyCode}</div>
+              </div>
+            ))}
+          </div>
+
+          <div class="card">
+            <h2 style="margin-top:0;">Summary</h2>
+            <div class="line">
+              <div>Subtotal</div>
+              <div>{(order.subTotalWithTax/100).toFixed(2)} {order.currencyCode}</div>
+            </div>
+            <div class="line">
+              <div>Shipping</div>
+              <div>{(order.shippingWithTax/100).toFixed(2)} {order.currencyCode}</div>
+            </div>
+            <div class="line total">
+              <div>Total</div>
+              <div>{(order.totalWithTax/100).toFixed(2)} {order.currencyCode}</div>
+            </div>
+            <div class="line">
+              <div>Status</div>
+              <div>{order.state}</div>
+            </div>
+            {order.customer && (
+              <>
+                <h3>Customer</h3>
+                <div class="muted">
+                  {order.customer.firstName} {order.customer.lastName}<br />
+                  {order.customer.emailAddress}
+                </div>
+              </>
+            )}
+            {order.shippingAddress && (
+              <>
+                <h3>Ship to</h3>
+                <div class="muted">
+                  {order.shippingAddress.fullName}<br />
+                  {order.shippingAddress.streetLine1}<br />
+                  {order.shippingAddress.city} {order.shippingAddress.postalCode}<br />
+                  {order.shippingAddress.countryCode}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  </body>
+</html>

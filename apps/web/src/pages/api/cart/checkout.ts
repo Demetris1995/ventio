@@ -1,93 +1,44 @@
+export const prerender = false;
 import type { APIRoute } from 'astro';
-
-const SHOP = import.meta.env.PUBLIC_SHOP_API_URL!;
-
-async function gfetch(
-  request: Request,
-  query: string,
-  variables?: Record<string, unknown>
-) {
-  const res = await fetch(SHOP, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      cookie: request.headers.get('cookie') ?? '',
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const setCookie = res.headers.get('set-cookie');
-  const json = (await res.json()) as { data?: any; errors?: any };
-  return { json, setCookie };
-}
+import { SHOP_API_URL } from '../../../lib/client';
+import { MUTATION_CHECKOUT } from '../../../lib/gql';
 
 export const POST: APIRoute = async ({ request }) => {
-  const payload = (await request.json()) as {
-    email: string;
-    firstName: string;
-    lastName: string;
-    streetLine1: string;
-    city: string;
-    postalCode: string;
-    countryCode: string; // ISO 2-letter, e.g. "CY"
-  };
+  const ct = request.headers.get('content-type') || '';
+  const body = ct.includes('application/json')
+    ? ((await request.json()) as any)
+    : Object.fromEntries(await request.formData());
 
-  // 1) Customer
-  await gfetch(
-    request,
-    `mutation($input: CreateCustomerInput!) {
-      setCustomerForOrder(input: $input) { __typename }
-    }`,
-    { input: { emailAddress: payload.email, firstName: payload.firstName, lastName: payload.lastName } }
-  );
+  const email = String(body?.email ?? '');
+  const firstName = String(body?.firstName ?? '');
+  const lastName = String(body?.lastName ?? '');
+  const streetLine1 = String(body?.streetLine1 ?? '');
+  const city = String(body?.city ?? '');
+  const postalCode = String(body?.postalCode ?? '');
+  const countryCode = String(body?.countryCode ?? '');
 
-  // 2) Addresses
-  await gfetch(
-    request,
-    `mutation($ship: CreateAddressInput!, $bill: CreateAddressInput) {
-      setOrderShippingAddress(input: $ship) { __typename }
-      setOrderBillingAddress(input: $bill) { __typename }
-    }`,
-    {
-      ship: {
-        fullName: `${payload.firstName} ${payload.lastName}`,
-        streetLine1: payload.streetLine1,
-        city: payload.city,
-        postalCode: payload.postalCode,
-        countryCode: payload.countryCode,
-      },
-      bill: {
-        fullName: `${payload.firstName} ${payload.lastName}`,
-        streetLine1: payload.streetLine1,
-        city: payload.city,
-        postalCode: payload.postalCode,
-        countryCode: payload.countryCode,
-      },
-    }
-  );
+  if (!email || !firstName || !lastName || !streetLine1 || !city || !postalCode || !countryCode) {
+    return new Response(JSON.stringify({ message: 'Missing checkout fields' }), { status: 400 });
+  }
 
-  // 3) Transition to ArrangingPayment
-  await gfetch(
-    request,
-    `mutation { transitionOrderToState(state: "ArrangingPayment") { __typename ... on Order { id state } } }`
-  );
+  const res = await fetch(SHOP_API_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: request.headers.get('cookie') ?? '' },
+    body: JSON.stringify({
+      query: MUTATION_CHECKOUT,
+      variables: { email, firstName, lastName, streetLine1, city, postalCode, countryCode },
+    }),
+  });
 
-  // 4) Add payment (manual handler we registered)
-  const { json, setCookie } = await gfetch(
-    request,
-    `mutation {
-      addPaymentToOrder(input: { method: "manual", metadata: { note: "dev" } }) {
-        __typename
-        ... on Order { id state code totalWithTax }
-        ... on ErrorResult { errorCode message }
-      }
-    }`
-  );
+  const setCookie = res.headers.get('set-cookie');
+  const json = (await res.json()) as any;
+  const code =
+    json?.data?.transitionOrderToState?.code ??
+    json?.data?.addPaymentToOrder?.code ??
+    null;
 
-  return new Response(JSON.stringify(json.data?.addPaymentToOrder ?? json), {
+  return new Response(JSON.stringify(code ? { code } : (json?.data ?? json)), {
     status: 200,
-    headers: {
-      'content-type': 'application/json',
-      ...(setCookie ? { 'set-cookie': setCookie } : {}),
-    },
+    headers: { 'content-type': 'application/json', ...(setCookie ? { 'set-cookie': setCookie } : {}) },
   });
 };

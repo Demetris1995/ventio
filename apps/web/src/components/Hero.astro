@@ -1,0 +1,37 @@
+---
+/**
+ * Simple, clean hero matching the proposal’s positioning.
+ * CTA goes to product grid and to checkout/cart for quick paths.
+ */
+---
+
+<style>
+  .hero {
+    padding: 2.5rem 0 1.5rem 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .title { font-size: clamp(1.8rem, 3vw, 2.4rem); margin: 0; }
+  .subtitle { color:#555; margin: .25rem 0 0 0; max-width: 60ch; }
+  .ctas { display:flex; gap:.5rem; flex-wrap: wrap; margin-top: .75rem; }
+  .btn {
+    display:inline-block; text-decoration:none; color:inherit;
+    padding:.65rem .95rem; border-radius:10px; border:1px solid #e5e5e5; background:#fafafa;
+  }
+  .btn:hover { background:#f2f2f2; }
+  .btn.primary { background:black; color:white; border-color:black; }
+  .note { color:#777; font-size:.9rem; margin-top:.35rem; }
+</style>
+
+<section class="hero">
+  <h1 class="title">A new and improved way to find the right buyers and sell in Cyprus.</h1>
+  <p class="subtitle">
+    Launch-ready marketplace built on Vendure. Fast, modern, and scalable. Start listing products, take payments, and grow.
+  </p>
+  <div class="ctas">
+    <a class="btn primary" href="#products">Browse products</a>
+    <a class="btn" href="/cart">View cart</a>
+    <a class="btn" href="/checkout">Checkout</a>
+  </div>
+  <p class="note">Powered by Vendure • Astro frontend</p>
+</section>

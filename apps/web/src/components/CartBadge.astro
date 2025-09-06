@@ -1,0 +1,59 @@
+---
+// Floating cart badge that polls /api/cart/count and links to /cart
+const pollingMs = 5000;
+---
+<style>
+  .cart-badge {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .6rem .8rem;
+    border-radius: 999px;
+    border: 1px solid #e5e5e5;
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,.06);
+    text-decoration: none;
+    color: inherit;
+    z-index: 1000;
+  }
+  .dot {
+    display: inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 1px solid #e5e5e5;
+    font-size: .8rem;
+    line-height: 1;
+    background: #f8f8f8;
+  }
+  @media (max-width: 640px) {
+    .label { display:none; }
+  }
+</style>
+
+<a class="cart-badge" href="/cart" aria-label="Open cart">
+  <span>🛒 <span class="label">Cart</span></span>
+  <span class="dot" id="cart-count">0</span>
+</a>
+
+<script>
+  const el = document.getElementById('cart-count');
+  async function refresh() {
+    try {
+      const res = await fetch('/api/cart/count', { credentials: 'include' });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (typeof json?.count === 'number') {
+        el.textContent = String(json.count);
+      }
+    } catch {}
+  }
+  refresh();
+  setInterval(refresh, 5000);
+</script>

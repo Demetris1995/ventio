@@ -1,0 +1,56 @@
+---
+/**
+ * Simple top navigation bar.
+ * Links: Home, Cart, Checkout
+ */
+---
+
+<style>
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: saturate(180%) blur(8px);
+    background: rgba(255,255,255,.85);
+    border-bottom: 1px solid #eee;
+  }
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: .75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+  a { color: inherit; text-decoration: none; }
+  .brand { font-weight: 800; letter-spacing: 0.3px; }
+  nav { display: flex; gap: .75rem; align-items: center; }
+  .link {
+    padding: .4rem .7rem;
+    border-radius: 8px;
+    border: 1px solid transparent;
+  }
+  .link:hover { background: #f7f7f7; border-color: #e7e7e7; }
+  .right { display: flex; gap: .5rem; align-items: center; }
+  .search {
+    display: none; /* placeholder for future search */
+  }
+  @media (min-width: 640px) {
+    .search { display: inline-block; }
+  }
+</style>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="/">Ventio</a>
+    <nav>
+      <a class="link" href="/">Home</a>
+      <a class="link" href="/cart">Cart</a>
+      <a class="link" href="/checkout">Checkout</a>
+    </nav>
+    <div class="right">
+      <span class="search"></span>
+    </div>
+  </div>
+</header>

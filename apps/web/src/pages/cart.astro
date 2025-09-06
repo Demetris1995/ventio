@@ -1,0 +1,118 @@
+---
+export const prerender = false;
+
+import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client/core";
+
+// Forward the browser session cookie to Vendure during SSR
+const cookieHeader = Astro.request.headers.get('cookie') ?? '';
+
+const client = new ApolloClient({
+  link: new HttpLink({
+    uri: import.meta.env.PUBLIC_SHOP_API_URL,
+    fetch: (uri, options) => {
+      const headers = new Headers(options?.headers || {});
+      if (cookieHeader) headers.set('cookie', cookieHeader);
+      return fetch(uri, { ...options, headers });
+    },
+  }),
+  cache: new InMemoryCache(),
+});
+
+const { data } = await client.query({
+  query: gql`
+    query ActiveOrder {
+      activeOrder {
+        id
+        code
+        state
+        totalQuantity
+        totalWithTax
+        currencyCode
+        lines {
+          id
+          quantity
+          discountedLinePriceWithTax
+          productVariant { id name }
+        }
+      }
+    }
+  `,
+  fetchPolicy: "no-cache",
+});
+
+const order = data?.activeOrder ?? null;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cart — Ventio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      header { display:flex; justify-content: space-between; align-items:center; margin-bottom:1.25rem; }
+      a { color: inherit; }
+      .card { border:1px solid #eee; border-radius:12px; padding:1rem; margin-bottom:0.75rem; }
+      .row { display:flex; gap:1rem; align-items:center; justify-content:space-between; }
+      .qty { display:flex; align-items:center; gap:.5rem; }
+      input[type="number"]{ width:70px; padding:.4rem .5rem; border:1px solid #ddd; border-radius:8px; }
+      button { padding:.5rem .8rem; border:1px solid #ddd; background:#fafafa; border-radius:8px; cursor:pointer; }
+      .total { font-weight:600; margin-top:1rem; text-align:right; }
+      .empty { color:#666; }
+      .actions { display:flex; gap:.5rem; }
+      .checkout { display:inline-block; margin-top:1rem; padding:.7rem 1rem; border-radius:10px; background:black; color:white; text-decoration:none; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">← Continue shopping</a>
+      <a href="/checkout" class="checkout">Proceed to checkout</a>
+    </header>
+
+    {order ? (
+      <section>
+        <h1>Cart</h1>
+        {order.lines.length === 0 ? (
+          <p class="empty">Your cart is empty.</p>
+        ) : (
+          <div>
+            {order.lines.map((line:any) => (
+              <div class="card">
+                <div class="row">
+                  <div>
+                    <div style="font-weight:600">{line.productVariant?.name}</div>
+                    <div style="color:#555;font-size:.9rem">
+                      Line total: {(line.discountedLinePriceWithTax/100).toFixed(2)} {order.currencyCode}
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <form method="post" action="/api/cart/update">
+                      <input type="hidden" name="lineId" value={line.id} />
+                      <div class="qty">
+                        <label for={"qty-"+line.id}>Qty</label>
+                        <input id={"qty-"+line.id} type="number" name="quantity" min="0" value={line.quantity} />
+                        <button type="submit">Update</button>
+                      </div>
+                    </form>
+                    <form method="post" action="/api/cart/remove">
+                      <input type="hidden" name="lineId" value={line.id} />
+                      <button type="submit">Remove</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div class="total">
+              Total: {(order.totalWithTax/100).toFixed(2)} {order.currencyCode}
+            </div>
+            <div style="text-align:right">
+              <a href="/checkout" class="checkout">Proceed to checkout</a>
+            </div>
+          </div>
+        )}
+      </section>
+    ) : (
+      <p class="empty">No active order.</p>
+    )}
+  </body>
+</html>

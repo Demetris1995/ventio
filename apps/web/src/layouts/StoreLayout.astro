@@ -1,0 +1,49 @@
+---
+/**
+ * Site-wide layout with SEO-ready <head>.
+ * Props:
+ *  - title?: string
+ *  - description?: string
+ */
+export interface Props {
+  title?: string;
+  description?: string;
+}
+const {
+  title = "Ventio — Marketplace",
+  description = "A new and improved way to find the right buyers and sell in Cyprus.",
+} = Astro.props;
+
+import Header from "../components/Header.astro";
+import CartBadge from "../components/CartBadge.astro";
+
+const origin = Astro.site?.origin ?? "";
+const url = origin + Astro.url.pathname;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{title}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={url} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      :root { --container: 1120px; }
+      body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif; }
+      .container { max-width: var(--container); margin: 0 auto; padding: 1rem; }
+      main { padding-bottom: 64px; }
+    </style>
+  </head>
+  <body>
+    <Header />
+    <main class="container">
+      <slot />
+    </main>
+    <CartBadge />
+  </body>
+</html>

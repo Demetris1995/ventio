@@ -1,0 +1,118 @@
+---
+export const prerender = false;
+
+import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client/core";
+
+const client = new ApolloClient({
+  link: new HttpLink({
+    uri: import.meta.env.PUBLIC_SHOP_API_URL,
+    fetch,
+    fetchOptions: { credentials: "include" },
+  }),
+  cache: new InMemoryCache(),
+});
+
+const { data } = await client.query({
+  query: gql`
+    query {
+      activeOrder { id totalWithTax currencyCode totalQuantity }
+    }
+  `,
+  fetchPolicy: "no-cache",
+});
+
+const order = data?.activeOrder ?? null;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout — Ventio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      form { display:grid; gap:.75rem; max-width:520px; }
+      input, select { padding:.6rem .7rem; border:1px solid #ddd; border-radius:10px; }
+      button { padding:.7rem 1rem; border-radius:10px; background:black; color:white; border:none; cursor:pointer; }
+      .row { display:grid; grid-template-columns: 1fr 1fr; gap:.75rem; }
+      .box { border:1px solid #eee; border-radius:12px; padding:1rem; margin-bottom:1rem; }
+      .muted { color:#666; }
+      .error { color:#b00020; }
+    </style>
+  </head>
+  <body>
+    <a href="/cart">← Back to cart</a>
+    <h1>Checkout</h1>
+
+    {order ? (
+      <div class="box">
+        <div>Items: {order.totalQuantity}</div>
+        <div>Total: {(order.totalWithTax/100).toFixed(2)} {order.currencyCode}</div>
+      </div>
+    ) : (
+      <p class="muted">No active order.</p>
+    )}
+
+    <form id="checkout-form">
+      <div class="row">
+        <input name="firstName" placeholder="First name" required />
+        <input name="lastName" placeholder="Last name" required />
+      </div>
+      <input type="email" name="email" placeholder="Email" required />
+      <input name="streetLine1" placeholder="Street address" required />
+      <div class="row">
+        <input name="city" placeholder="City" required />
+        <input name="postalCode" placeholder="Postal code" required />
+      </div>
+      <select name="countryCode" required>
+        <option value="CY" selected>Cyprus (CY)</option>
+        <option value="GR">Greece (GR)</option>
+        <option value="GB">United Kingdom (GB)</option>
+        <option value="DE">Germany (DE)</option>
+      </select>
+      <button type="submit">Place order</button>
+      <p id="msg" class="muted"></p>
+      <p id="err" class="error"></p>
+    </form>
+
+    <script type="module">
+      const form = document.getElementById('checkout-form');
+      const msg = document.getElementById('msg');
+      const err = document.getElementById('err');
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        msg.textContent = 'Placing order...';
+        err.textContent = '';
+
+        const fd = new FormData(form);
+        const payload = Object.fromEntries(fd.entries());
+
+        try {
+          const res = await fetch('/api/cart/checkout', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const json = await res.json();
+
+          if (json?.code) {
+            // Redirect to the confirmation page using the order code
+            window.location.href = `/order/${encodeURIComponent(json.code)}`;
+            return;
+          }
+
+          if (json?.message) {
+            err.textContent = json.message;
+            msg.textContent = '';
+          } else {
+            msg.textContent = 'Done.';
+          }
+        } catch (e) {
+          err.textContent = 'Something went wrong placing your order.';
+          msg.textContent = '';
+        }
+      });
+    </script>
+  </body>
+</html>

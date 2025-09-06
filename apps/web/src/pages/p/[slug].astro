@@ -1,58 +1,73 @@
 ---
 export const prerender = false;
 
-import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client/core";
+import { ApolloClient, InMemoryCache, HttpLink, gql } from "@apollo/client/core";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { QUERY_PRODUCT_BY_SLUG } from "../../lib/gql";
+
+// Forward the browser cookie to Vendure during SSR (for consistent session)
+const cookieHeader = Astro.request.headers.get('cookie') ?? '';
 
 const client = new ApolloClient({
-  link: new HttpLink({ uri: import.meta.env.PUBLIC_SHOP_API_URL, fetch }),
+  link: new HttpLink({
+    uri: import.meta.env.PUBLIC_SHOP_API_URL,
+    fetch: (uri, options) => {
+      const headers = new Headers(options?.headers || {});
+      if (cookieHeader) headers.set('cookie', cookieHeader);
+      return fetch(uri, { ...options, headers });
+    },
+  }),
   cache: new InMemoryCache(),
 });
 
-const slug = Astro.params.slug as string;
-
+const slug = Astro.params.slug!;
 const { data } = await client.query({
-  query: gql`
-    query GetProductBySlug($slug: String!) {
-      product(slug: $slug) {
-        id
-        name
-        description
-        featuredAsset { preview }
-        assets { preview }
-        variants { id name priceWithTax currencyCode }
-      }
-    }
-  `,
+  query: gql(QUERY_PRODUCT_BY_SLUG),
   variables: { slug },
+  fetchPolicy: "no-cache",
 });
-
-const p = data?.product;
-if (!p) throw Astro.redirect(`/`);
+const product = data?.product ?? null;
+const firstVariantId = product?.variants?.[0]?.id ?? null;
+const price = product?.variants?.[0]?.priceWithTax ?? null;
+const currencyCode = product?.variants?.[0]?.currencyCode ?? "";
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{p.name} — Ventio</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 960px; }
-      .thumbs { display: flex; gap: .5rem; margin: .5rem 0 1rem; }
-      .thumbs img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; }
-      .price { font-size: 1.1rem; font-weight: 600; margin: .5rem 0 1rem; }
-      a { color: #0b5; }
-    </style>
-  </head>
-  <body>
-    <a href="/">← Back</a>
-    <h1>{p.name}</h1>
-    <img src={p.featuredAsset?.preview} alt={p.name} style="max-width:100%; border-radius: 12px; border: 1px solid #eee;" />
-    <div class="thumbs">
-      {p.assets?.map((a:any) => <img src={a.preview} alt="" loading="lazy" />)}
-    </div>
-    <p class="price">
-      {p.variants?.[0] ? `${(p.variants[0].priceWithTax/100).toFixed(2)} ${p.variants[0].currencyCode}` : 'Price on request'}
-    </p>
-    <p>{p.description ?? ''}</p>
-  </body>
-</html>
+<StoreLayout title={product ? product.name : 'Product'}>
+  {!product ? (
+    <p>Not found.</p>
+  ) : (
+    <>
+      <section style="display:grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items:start;">
+        <div style="border:1px solid #eee; border-radius:12px; padding:1rem; background:#fff; min-height:320px; display:flex; align-items:center; justify-content:center;">
+          {product.featuredAsset?.preview ? (
+            <img src={product.featuredAsset.preview} alt={product.name} style="max-width:100%; max-height:420px; object-fit:contain;" loading="lazy" />
+          ) : (
+            <div style="color:#777">No image</div>
+          )}
+        </div>
+        <div>
+          <h1 style="margin-top:0;">{product.name}</h1>
+          {price !== null ? (
+            <div style="color:#555; margin-bottom: .5rem;">
+              {(price/100).toFixed(2)} {currencyCode}
+            </div>
+          ) : null}
+          <div style="color:#555; white-space:pre-wrap; margin: .5rem 0 1rem 0;">{product.description}</div>
+
+          {firstVariantId ? (
+            // Pure HTML form (no JS). The server will 302 → /cart and set the cookie with Path=/
+            <form method="post" action={`/api/cart/add?variantId=${encodeURIComponent(firstVariantId)}&quantity=1`} style="display:flex; gap:.5rem; align-items:center;">
+              <input type="hidden" name="variantId" value={firstVariantId} />
+              <input name="quantity" type="number" value="1" min="1" style="width:80px; padding:.5rem; border:1px solid #ddd; border-radius:8px;" />
+              <button type="submit" style="padding:.65rem 1rem; border-radius:10px; background:black; color:white; border:none; cursor:pointer;">
+                Add to cart
+              </button>
+            </form>
+          ) : (
+            <div style="color:#a00">No purchasable variants.</div>
+          )}
+        </div>
+      </section>
+    </>
+  )}
+</StoreLayout>
