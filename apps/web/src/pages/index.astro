@@ -6,11 +6,17 @@ import StoreLayout from "../layouts/StoreLayout.astro";
 import Hero from "../components/Hero.astro";
 import ProductCard from "../components/ProductCard.astro";
 
+// Forward the browser session cookie to Vendure during SSR
+const cookieHeader = Astro.request.headers.get('cookie') ?? '';
+
 const client = new ApolloClient({
   link: new HttpLink({
     uri: import.meta.env.PUBLIC_SHOP_API_URL,
-    fetch,
-    fetchOptions: { credentials: "include" },
+    fetch: (uri, options) => {
+      const headers = new Headers(options?.headers || {});
+      if (cookieHeader) headers.set('cookie', cookieHeader);
+      return fetch(uri, { ...options, headers });
+    },
   }),
   cache: new InMemoryCache(),
 });
@@ -18,17 +24,21 @@ const client = new ApolloClient({
 const { data } = await client.query({
   query: gql`
     query HomeProducts {
-      products(options: { take: 24 }) {
+      products(options: { take: 12, sort: { createdAt: DESC } }) {
         items {
           id
           slug
           name
-          featuredAsset { preview }
+          description
+          featuredAsset { 
+            preview 
+          }
           variants {
             id
             name
             priceWithTax
             currencyCode
+            stockLevel
           }
         }
         totalItems
@@ -38,23 +48,379 @@ const { data } = await client.query({
   fetchPolicy: "no-cache",
 });
 
-const items = data?.products?.items ?? [];
-const total = data?.products?.totalItems ?? 0;
+const products = data?.products?.items ?? [];
+const totalProducts = data?.products?.totalItems ?? 0;
 ---
 
-<StoreLayout title="Ventio — Marketplace" description="A new and improved way to find the right buyers and sell in Cyprus.">
+<StoreLayout 
+  title="Ventio — Cyprus's Premier Marketplace" 
+  description="Discover authentic Cypriot products from local artisans and businesses. Quality handcrafted goods, premium foods, and unique finds."
+>
   <Hero />
 
-  <section id="products" style="scroll-margin-top: 80px;">
-    <h2 style="margin: 0 0 .25rem 0;">Products</h2>
-    <p style="color:#666; margin-top:0;">{total} item{total === 1 ? '' : 's'}</p>
+  <!-- Products Section -->
+  <section id="products" style="scroll-margin-top: 100px; padding: 4rem 0;">
+    <div class="section-header" style="text-align: center; margin-bottom: 3rem;" data-animate>
+      <h2 style="font-size: 2.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1rem;">
+        Featured Products
+      </h2>
+      <p style="font-size: 1.1rem; color: var(--gray-600); max-width: 600px; margin: 0 auto; line-height: 1.7;">
+        Discover the finest products from local Cypriot sellers, curated for quality and authenticity.
+        <span style="color: var(--primary); font-weight: 600;">{totalProducts} products</span> available.
+      </p>
+    </div>
 
-    {items.length === 0 ? (
-      <p>No products yet.</p>
-    ) : (
-      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;">
-        {items.map((p:any) => <ProductCard product={p} />)}
+    {products.length === 0 ? (
+      <div style="text-align: center; padding: 4rem 2rem;" data-animate>
+        <div style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.5;">📦</div>
+        <h3 style="font-size: 1.5rem; color: var(--gray-600); margin-bottom: 0.5rem;">No Products Yet</h3>
+        <p style="color: var(--gray-500);">
+          We're working on adding amazing products from local Cypriot sellers.
+          <br>Check back soon for handcrafted goods and authentic local finds!
+        </p>
       </div>
+    ) : (
+      <div class="products-grid" style="
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+        gap: 2rem;
+        margin-bottom: 3rem;
+      ">
+        {products.map((product, index) => (
+          <ProductCard product={product} index={index} />
+        ))}
+      </div>
+
+      <!-- Load More Button -->
+      {totalProducts > 12 && (
+        <div style="text-align: center;" data-animate>
+          <a 
+            href="#" 
+            class="load-more-btn"
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 0.5rem;
+              padding: 1rem 2rem;
+              background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+              color: white;
+              text-decoration: none;
+              border-radius: 12px;
+              font-weight: 600;
+              transition: all 0.3s ease;
+              box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            "
+          >
+            ✨ Load More Products
+          </a>
+        </div>
+      )}
     )}
   </section>
+
+  <!-- Features Section -->
+  <section style="padding: 4rem 0; background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);">
+    <div class="section-header" style="text-align: center; margin-bottom: 3rem;" data-animate>
+      <h2 style="font-size: 2.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1rem;">
+        Why Choose Ventio?
+      </h2>
+      <p style="font-size: 1.1rem; color: var(--gray-600); max-width: 600px; margin: 0 auto;">
+        Built specifically for the Cyprus marketplace with features that matter to local buyers and sellers.
+      </p>
+    </div>
+    
+    <div style="
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    ">
+      <div class="feature-card" style="
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+      " data-animate>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.75rem;">
+          Lightning Fast
+        </h3>
+        <p style="color: var(--gray-600); line-height: 1.6;">
+          Built with modern technology for instant loading and seamless browsing experience across all devices.
+        </p>
+      </div>
+      
+      <div class="feature-card" style="
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+      " data-animate>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🔒</div>
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.75rem;">
+          Secure Payments
+        </h3>
+        <p style="color: var(--gray-600); line-height: 1.6;">
+          Your transactions are protected with bank-level security and encryption. Shop with confidence.
+        </p>
+      </div>
+      
+      <div class="feature-card" style="
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+      " data-animate>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🌍</div>
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.75rem;">
+          Local Focus
+        </h3>
+        <p style="color: var(--gray-600); line-height: 1.6;">
+          Specifically designed for Cyprus, supporting local businesses and celebrating our unique culture.
+        </p>
+      </div>
+      
+      <div class="feature-card" style="
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+      " data-animate>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📱</div>
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.75rem;">
+          Mobile First
+        </h3>
+        <p style="color: var(--gray-600); line-height: 1.6;">
+          Perfect experience on all devices, from smartphones to desktops. Shop anywhere, anytime.
+        </p>
+      </div>
+      
+      <div class="feature-card" style="
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+      " data-animate>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">💬</div>
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.75rem;">
+          24/7 Support
+        </h3>
+        <p style="color: var(--gray-600); line-height: 1.6;">
+          Get help whenever you need it with our dedicated customer support team ready to assist you.
+        </p>
+      </div>
+      
+      <div class="feature-card" style="
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+      " data-animate>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">⚡</div>
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.75rem;">
+          Easy Setup
+        </h3>
+        <p style="color: var(--gray-600); line-height: 1.6;">
+          Start selling in minutes with our streamlined seller onboarding process and intuitive interface.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Newsletter Section -->
+  <section style="padding: 4rem 0; text-align: center;">
+    <div style="max-width: 600px; margin: 0 auto;" data-animate>
+      <h2 style="font-size: 2.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1rem;">
+        Stay Updated
+      </h2>
+      <p style="font-size: 1.1rem; color: var(--gray-600); margin-bottom: 2rem; line-height: 1.7;">
+        Get notified about new products, special offers, and local marketplace updates.
+      </p>
+      
+      <form 
+        class="newsletter-form"
+        style="
+          display: flex;
+          gap: 1rem;
+          max-width: 400px;
+          margin: 0 auto;
+          flex-wrap: wrap;
+        "
+      >
+        <input 
+          type="email" 
+          placeholder="Enter your email"
+          style="
+            flex: 1;
+            padding: 1rem 1.25rem;
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            font-size: 1rem;
+            min-width: 250px;
+            transition: all 0.3s ease;
+          "
+        />
+        <button 
+          type="submit"
+          style="
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+          "
+        >
+          Subscribe
+        </button>
+      </form>
+    </div>
+  </section>
 </StoreLayout>
+
+<style>
+  .load-more-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4) !important;
+  }
+
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  .newsletter-form input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+
+  .newsletter-form button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  }
+
+  @media (max-width: 640px) {
+    .newsletter-form {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .newsletter-form input {
+      width: 100%;
+      min-width: unset;
+    }
+
+    .newsletter-form button {
+      width: 100%;
+    }
+
+    .products-grid {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+      gap: 1.5rem !important;
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Setup load more functionality
+    const loadMoreBtn = document.querySelector('.load-more-btn');
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        const originalText = loadMoreBtn.textContent;
+        loadMoreBtn.textContent = '⏳ Loading...';
+        loadMoreBtn.style.pointerEvents = 'none';
+        
+        try {
+          // Simulate loading more products (you can implement actual pagination here)
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          window.showNotification?.('More products coming soon!', 'success');
+          loadMoreBtn.textContent = 'Coming Soon';
+          
+        } catch (error) {
+          loadMoreBtn.textContent = originalText;
+          loadMoreBtn.style.pointerEvents = 'auto';
+          window.showNotification?.('Failed to load more products', 'error');
+        }
+      });
+    }
+
+    // Setup newsletter form
+    const newsletterForm = document.querySelector('.newsletter-form');
+    if (newsletterForm) {
+      newsletterForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const email = e.target.querySelector('input[type="email"]').value;
+        const button = e.target.querySelector('button');
+        
+        if (!email) {
+          window.showNotification?.('Please enter your email address', 'error');
+          return;
+        }
+
+        const originalText = button.textContent;
+        button.textContent = 'Subscribing...';
+        button.disabled = true;
+        
+        try {
+          // Simulate newsletter subscription (implement your actual logic here)
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          window.showNotification?.('Thanks for subscribing! 🎉', 'success');
+          e.target.reset();
+          
+        } catch (error) {
+          window.showNotification?.('Subscription failed. Please try again.', 'error');
+        } finally {
+          button.textContent = originalText;
+          button.disabled = false;
+        }
+      });
+    }
+
+    // Enhanced scroll animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+          }, index * 100);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all elements with data-animate attribute
+    document.querySelectorAll('[data-animate]').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(30px)';
+      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(el);
+    });
+  });
+</script>
