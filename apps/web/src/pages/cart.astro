@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client/core";
+import StoreLayout from "../layouts/StoreLayout.astro";
 
 // Forward the browser session cookie to Vendure during SSR
 const cookieHeader = Astro.request.headers.get('cookie') ?? '';
@@ -27,12 +28,31 @@ const { data } = await client.query({
         state
         totalQuantity
         totalWithTax
+        subTotalWithTax
+        shippingWithTax
         currencyCode
         lines {
           id
           quantity
+          linePriceWithTax
           discountedLinePriceWithTax
-          productVariant { id name }
+          productVariant {
+            id
+            name
+            sku
+            priceWithTax
+            product {
+              slug
+              name
+              description
+              featuredAsset {
+                preview
+              }
+            }
+          }
+          featuredAsset {
+            preview
+          }
         }
       }
     }
@@ -43,76 +63,782 @@ const { data } = await client.query({
 const order = data?.activeOrder ?? null;
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Cart — Ventio</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; }
-      header { display:flex; justify-content: space-between; align-items:center; margin-bottom:1.25rem; }
-      a { color: inherit; }
-      .card { border:1px solid #eee; border-radius:12px; padding:1rem; margin-bottom:0.75rem; }
-      .row { display:flex; gap:1rem; align-items:center; justify-content:space-between; }
-      .qty { display:flex; align-items:center; gap:.5rem; }
-      input[type="number"]{ width:70px; padding:.4rem .5rem; border:1px solid #ddd; border-radius:8px; }
-      button { padding:.5rem .8rem; border:1px solid #ddd; background:#fafafa; border-radius:8px; cursor:pointer; }
-      .total { font-weight:600; margin-top:1rem; text-align:right; }
-      .empty { color:#666; }
-      .actions { display:flex; gap:.5rem; }
-      .checkout { display:inline-block; margin-top:1rem; padding:.7rem 1rem; border-radius:10px; background:black; color:white; text-decoration:none; }
-    </style>
-  </head>
-  <body>
-    <header>
-      <a href="/">← Continue shopping</a>
-      <a href="/checkout" class="checkout">Proceed to checkout</a>
-    </header>
+<StoreLayout title="Shopping Cart — Ventio">
+  <div class="cart-container">
+    <!-- Cart Header -->
+    <div class="cart-header">
+      <div class="breadcrumb">
+        <a href="/" class="breadcrumb-link">← Continue Shopping</a>
+      </div>
+      <h1 class="cart-title">Shopping Cart</h1>
+      
+      {order && order.lines.length > 0 && (
+        <div class="cart-summary-header">
+          <span class="item-count">{order.totalQuantity} item{order.totalQuantity !== 1 ? 's' : ''}</span>
+          <span class="cart-total">€{(order.totalWithTax / 100).toFixed(2)}</span>
+        </div>
+      )}
+    </div>
 
-    {order ? (
-      <section>
-        <h1>Cart</h1>
-        {order.lines.length === 0 ? (
-          <p class="empty">Your cart is empty.</p>
-        ) : (
-          <div>
-            {order.lines.map((line:any) => (
-              <div class="card">
-                <div class="row">
-                  <div>
-                    <div style="font-weight:600">{line.productVariant?.name}</div>
-                    <div style="color:#555;font-size:.9rem">
-                      Line total: {(line.discountedLinePriceWithTax/100).toFixed(2)} {order.currencyCode}
-                    </div>
-                  </div>
-                  <div class="actions">
-                    <form method="post" action="/api/cart/update">
-                      <input type="hidden" name="lineId" value={line.id} />
-                      <div class="qty">
-                        <label for={"qty-"+line.id}>Qty</label>
-                        <input id={"qty-"+line.id} type="number" name="quantity" min="0" value={line.quantity} />
-                        <button type="submit">Update</button>
-                      </div>
-                    </form>
-                    <form method="post" action="/api/cart/remove">
-                      <input type="hidden" name="lineId" value={line.id} />
-                      <button type="submit">Remove</button>
-                    </form>
-                  </div>
+    {!order || order.lines.length === 0 ? (
+      <!-- Empty Cart State -->
+      <div class="empty-cart">
+        <div class="empty-cart-icon">🛒</div>
+        <h2 class="empty-cart-title">Your cart is empty</h2>
+        <p class="empty-cart-text">
+          Looks like you haven't added any items to your cart yet.
+          <br>Explore our products and find something you love!
+        </p>
+        <a href="/#products" class="btn btn-primary">
+          🛍️ Start Shopping
+        </a>
+      </div>
+    ) : (
+      <div class="cart-content">
+        <!-- Cart Items -->
+        <div class="cart-items">
+          {order.lines.map((line) => (
+            <div class="cart-item" data-line-id={line.id}>
+              <div class="item-image">
+                {line.featuredAsset?.preview || line.productVariant?.product?.featuredAsset?.preview ? (
+                  <img 
+                    src={line.featuredAsset?.preview || line.productVariant?.product?.featuredAsset?.preview} 
+                    alt={line.productVariant?.name || 'Product'} 
+                    loading="lazy"
+                  />
+                ) : (
+                  <div class="item-placeholder">📦</div>
+                )}
+              </div>
+              
+              <div class="item-details">
+                <h3 class="item-name">
+                  {line.productVariant?.product?.slug ? (
+                    <a href={`/p/${line.productVariant.product.slug}`}>
+                      {line.productVariant?.name || 'Unknown Product'}
+                    </a>
+                  ) : (
+                    <span>{line.productVariant?.name || 'Unknown Product'}</span>
+                  )}
+                </h3>
+                
+                {line.productVariant?.product?.description && (
+                  <p class="item-description">
+                    {line.productVariant.product.description.length > 100 
+                      ? line.productVariant.product.description.substring(0, 100) + '...'
+                      : line.productVariant.product.description
+                    }
+                  </p>
+                )}
+                
+                <div class="item-meta">
+                  <span class="item-sku">SKU: {line.productVariant?.sku || 'N/A'}</span>
+                  <span class="item-unit-price">
+                    €{((line.productVariant?.priceWithTax || 0) / 100).toFixed(2)} each
+                  </span>
                 </div>
               </div>
-            ))}
-            <div class="total">
-              Total: {(order.totalWithTax/100).toFixed(2)} {order.currencyCode}
+              
+              <div class="item-actions">
+                <div class="quantity-controls">
+                  <button 
+                    type="button" 
+                    class="qty-btn qty-decrease"
+                    data-line-id={line.id}
+                    data-current-qty={line.quantity}
+                    title="Decrease quantity"
+                  >
+                    −
+                  </button>
+                  <input 
+                    type="number" 
+                    class="qty-input"
+                    value={line.quantity}
+                    min="1"
+                    max="99"
+                    data-line-id={line.id}
+                    title="Quantity"
+                  />
+                  <button 
+                    type="button" 
+                    class="qty-btn qty-increase"
+                    data-line-id={line.id}
+                    data-current-qty={line.quantity}
+                    title="Increase quantity"
+                  >
+                    +
+                  </button>
+                </div>
+                
+                <div class="item-price">
+                  <span class="line-total">
+                    €{(line.discountedLinePriceWithTax / 100).toFixed(2)}
+                  </span>
+                  {line.discountedLinePriceWithTax !== line.linePriceWithTax && (
+                    <span class="line-original">
+                      €{(line.linePriceWithTax / 100).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                
+                <button 
+                  type="button" 
+                  class="remove-btn"
+                  data-line-id={line.id}
+                  title="Remove from cart"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
-            <div style="text-align:right">
-              <a href="/checkout" class="checkout">Proceed to checkout</a>
+          ))}
+        </div>
+
+        <!-- Cart Summary -->
+        <div class="cart-sidebar">
+          <div class="cart-summary">
+            <h3 class="summary-title">Order Summary</h3>
+            
+            <div class="summary-line">
+              <span>Subtotal ({order.totalQuantity} items)</span>
+              <span>€{(order.subTotalWithTax / 100).toFixed(2)}</span>
+            </div>
+            
+            <div class="summary-line">
+              <span>Shipping</span>
+              <span>{order.shippingWithTax ? `€${(order.shippingWithTax / 100).toFixed(2)}` : 'Free'}</span>
+            </div>
+            
+            <div class="summary-divider"></div>
+            
+            <div class="summary-total">
+              <span>Total</span>
+              <span>€{(order.totalWithTax / 100).toFixed(2)}</span>
+            </div>
+            
+            <div class="checkout-actions">
+              <a href="/checkout" class="btn btn-primary btn-checkout">
+                🔒 Proceed to Checkout
+              </a>
+              
+              <button type="button" class="btn btn-secondary btn-clear-cart">
+                Clear Cart
+              </button>
             </div>
           </div>
-        )}
-      </section>
-    ) : (
-      <p class="empty">No active order.</p>
+          
+          <!-- Shipping Info -->
+          <div class="shipping-info">
+            <h4>📦 Shipping Information</h4>
+            <p>Free shipping on orders over €50 within Cyprus!</p>
+            <p>Estimated delivery: 2-5 business days</p>
+          </div>
+        </div>
+      </div>
     )}
-  </body>
-</html>
+  </div>
+</StoreLayout>
+
+<style>
+  .cart-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+
+  .cart-header {
+    margin-bottom: 2rem;
+  }
+
+  .breadcrumb-link {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+  }
+
+  .breadcrumb-link:hover {
+    color: var(--primary-dark);
+  }
+
+  .cart-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin: 0.5rem 0 1rem 0;
+  }
+
+  .cart-summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: var(--gray-50);
+    border-radius: 12px;
+    margin-top: 1rem;
+  }
+
+  .item-count {
+    color: var(--gray-600);
+    font-weight: 500;
+  }
+
+  .cart-total {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  /* Empty Cart */
+  .empty-cart {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .empty-cart-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.6;
+  }
+
+  .empty-cart-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-cart-text {
+    color: var(--gray-600);
+    line-height: 1.6;
+    margin-bottom: 2rem;
+  }
+
+  /* Cart Content */
+  .cart-content {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .cart-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .cart-item {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    display: grid;
+    grid-template-columns: 100px 1fr auto;
+    gap: 1rem;
+    align-items: start;
+    transition: all 0.3s ease;
+  }
+
+  .cart-item:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  }
+
+  .item-image {
+    width: 100px;
+    height: 100px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .item-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .item-placeholder {
+    font-size: 2rem;
+    color: var(--gray-400);
+  }
+
+  .item-details {
+    min-width: 0; /* Allow text truncation */
+  }
+
+  .item-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.3;
+  }
+
+  .item-name a {
+    color: var(--gray-900);
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+
+  .item-name a:hover {
+    color: var(--primary);
+  }
+
+  .item-description {
+    font-size: 0.9rem;
+    color: var(--gray-600);
+    margin: 0 0 0.75rem 0;
+    line-height: 1.4;
+  }
+
+  .item-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--gray-500);
+  }
+
+  .item-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.75rem;
+    min-width: 120px;
+  }
+
+  .quantity-controls {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .qty-btn {
+    background: var(--gray-50);
+    border: none;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: background 0.3s ease;
+  }
+
+  .qty-btn:hover {
+    background: var(--gray-100);
+  }
+
+  .qty-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .qty-input {
+    width: 50px;
+    height: 32px;
+    text-align: center;
+    border: none;
+    background: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .qty-input:focus {
+    outline: none;
+  }
+
+  .item-price {
+    text-align: right;
+  }
+
+  .line-total {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    display: block;
+  }
+
+  .line-original {
+    font-size: 0.9rem;
+    color: var(--gray-500);
+    text-decoration: line-through;
+    display: block;
+    margin-top: 0.25rem;
+  }
+
+  .remove-btn {
+    background: none;
+    border: none;
+    color: var(--gray-400);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+  }
+
+  .remove-btn:hover {
+    color: var(--error);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  /* Cart Sidebar */
+  .cart-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: sticky;
+    top: 90px;
+  }
+
+  .cart-summary {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .summary-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 1rem 0;
+    color: var(--gray-900);
+  }
+
+  .summary-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    color: var(--gray-600);
+  }
+
+  .summary-divider {
+    height: 1px;
+    background: var(--gray-200);
+    margin: 0.75rem 0;
+  }
+
+  .summary-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    border-top: 2px solid var(--gray-200);
+    margin-top: 0.5rem;
+  }
+
+  .checkout-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .btn {
+    padding: 0.875rem 1.5rem;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    border: none;
+    text-align: center;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  }
+
+  .btn-secondary {
+    background: var(--gray-100);
+    color: var(--gray-700);
+  }
+
+  .btn-secondary:hover {
+    background: var(--gray-200);
+  }
+
+  .btn-checkout {
+    font-size: 1rem;
+    padding: 1rem 1.5rem;
+  }
+
+  .shipping-info {
+    background: var(--gray-50);
+    border-radius: 12px;
+    padding: 1rem;
+  }
+
+  .shipping-info h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    color: var(--gray-900);
+  }
+
+  .shipping-info p {
+    font-size: 0.9rem;
+    color: var(--gray-600);
+    margin: 0.25rem 0;
+    line-height: 1.4;
+  }
+
+  /* Loading States */
+  .updating {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 1024px) {
+    .cart-content {
+      grid-template-columns: 1fr 300px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .cart-container {
+      padding: 1rem;
+    }
+
+    .cart-content {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .cart-sidebar {
+      position: static;
+      order: -1; /* Show summary at top on mobile */
+    }
+
+    .cart-item {
+      grid-template-columns: 80px 1fr;
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+
+    .item-actions {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--gray-100);
+    }
+
+    .item-image {
+      width: 80px;
+      height: 80px;
+    }
+
+    .cart-title {
+      font-size: 2rem;
+    }
+  }
+</style>
+
+<script>
+  class CartManager {
+    constructor() {
+      this.init();
+    }
+
+    init() {
+      this.setupQuantityControls();
+      this.setupRemoveButtons();
+      this.setupClearCart();
+    }
+
+    setupQuantityControls() {
+      // Quantity buttons
+      document.querySelectorAll('.qty-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => this.handleQuantityChange(e));
+      });
+
+      // Quantity inputs
+      document.querySelectorAll('.qty-input').forEach(input => {
+        input.addEventListener('change', (e) => this.handleQuantityInput(e));
+        input.addEventListener('blur', (e) => this.handleQuantityInput(e));
+      });
+    }
+
+    setupRemoveButtons() {
+      document.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => this.handleRemoveItem(e));
+      });
+    }
+
+    setupClearCart() {
+      const clearBtn = document.querySelector('.btn-clear-cart');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', (e) => this.handleClearCart(e));
+      }
+    }
+
+    async handleQuantityChange(event) {
+      const btn = event.target;
+      const lineId = btn.dataset.lineId;
+      const currentQty = parseInt(btn.dataset.currentQty);
+      const isIncrease = btn.classList.contains('qty-increase');
+      const newQty = isIncrease ? currentQty + 1 : Math.max(1, currentQty - 1);
+
+      await this.updateQuantity(lineId, newQty);
+    }
+
+    async handleQuantityInput(event) {
+      const input = event.target;
+      const lineId = input.dataset.lineId;
+      const newQty = Math.max(1, parseInt(input.value) || 1);
+
+      // Update input value to ensure it's valid
+      input.value = newQty;
+
+      await this.updateQuantity(lineId, newQty);
+    }
+
+    async updateQuantity(lineId, quantity) {
+      try {
+        const item = document.querySelector(`[data-line-id="${lineId}"]`);
+        item?.classList.add('updating');
+
+        const response = await fetch('/api/cart/update', {
+          method: 'POST',
+          headers: { 
+            'content-type': 'application/json',
+            'cache-control': 'no-cache'
+          },
+          body: JSON.stringify({ lineId, quantity }),
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result?.errorCode || result?.message) {
+          throw new Error(result.message || 'Update failed');
+        }
+
+        // Reload page to show updated totals
+        window.location.reload();
+
+      } catch (error) {
+        console.error('Update quantity error:', error);
+        window.showNotification?.('Failed to update quantity. Please try again.', 'error');
+        
+        // Remove loading state
+        const item = document.querySelector(`[data-line-id="${lineId}"]`);
+        item?.classList.remove('updating');
+      }
+    }
+
+    async handleRemoveItem(event) {
+      const btn = event.target;
+      const lineId = btn.dataset.lineId;
+
+      if (!confirm('Remove this item from your cart?')) {
+        return;
+      }
+
+      try {
+        const item = document.querySelector(`[data-line-id="${lineId}"]`);
+        item?.classList.add('updating');
+
+        const response = await fetch('/api/cart/remove', {
+          method: 'POST',
+          headers: { 
+            'content-type': 'application/json',
+            'cache-control': 'no-cache'
+          },
+          body: JSON.stringify({ lineId }),
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result?.errorCode || result?.message) {
+          throw new Error(result.message || 'Remove failed');
+        }
+
+        window.showNotification?.('Item removed from cart', 'success');
+        
+        // Reload page to show updated cart
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+
+      } catch (error) {
+        console.error('Remove item error:', error);
+        window.showNotification?.('Failed to remove item. Please try again.', 'error');
+        
+        // Remove loading state
+        const item = document.querySelector(`[data-line-id="${lineId}"]`);
+        item?.classList.remove('updating');
+      }
+    }
+
+    async handleClearCart(event) {
+      event.preventDefault();
+      if (!confirm('Clear all items from your cart?')) return;
+
+      try {
+        const sidebar = document.querySelector('.cart-sidebar');
+        sidebar?.classList.add('updating');
+
+        const response = await fetch('/api/cart/clear', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'cache-control': 'no-cache' },
+          credentials: 'include'
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+        if (result?.errorCode || result?.message) {
+          throw new Error(result.message || 'Clear failed');
+        }
+
+        window.showNotification?.('Cart cleared', 'success');
+        setTimeout(() => window.location.reload(), 300);
+      } catch (err) {
+        console.error('Clear cart error:', err);
+        window.showNotification?.('Failed to clear cart. Please try again.', 'error');
+        const sidebar = document.querySelector('.cart-sidebar');
+        sidebar?.classList.remove('updating');
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => new CartManager());
+</script>

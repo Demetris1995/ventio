@@ -1,50 +1,64 @@
 export const prerender = false;
+
 import type { APIRoute } from 'astro';
-const SHOP = import.meta.env.PUBLIC_SHOP_API_URL!;
+import { SHOP_API_URL } from '../../../lib/client';
+
+const MUTATION_REMOVE = /* GraphQL */ `
+  mutation RemoveOrderLine($orderLineId: ID!) {
+    removeOrderLine(orderLineId: $orderLineId) {
+      __typename
+      ... on Order {
+        id
+        totalQuantity
+        totalWithTax
+      }
+      ... on ErrorResult {
+        errorCode
+        message
+      }
+    }
+  }
+`;
+
+function extract(header: string | null, name: string) {
+  if (!header) return null;
+  const m = new RegExp(`${name}=([^;]+)`, 'i').exec(header);
+  return m?.[1] ?? null;
+}
+function buildCookie(name: string, value: string) {
+  return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax`;
+}
 
 export const POST: APIRoute = async ({ request }) => {
-  const ct = request.headers.get('content-type') || '';
-  let lineId = '';
-
-  if (ct.includes('application/json')) {
-    const b = (await request.json()) as any;
-    lineId = String(b.lineId ?? '');
-  } else {
-    const f = await request.formData();
-    lineId = String(f.get('lineId') ?? '');
-  }
+  let body: any = {};
+  try { body = await request.json(); } catch {}
+  const lineId = String(body?.lineId ?? '');
 
   if (!lineId) {
-    return new Response(JSON.stringify({ error: 'Invalid payload' }), { status: 400 });
-  }
-
-  const res = await fetch(SHOP, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie: request.headers.get('cookie') ?? '' },
-    body: JSON.stringify({
-      query: `mutation($lineId: ID!) {
-        removeOrderLine(orderLineId: $lineId) {
-          ... on Order { id state code totalWithTax }
-          ... on ErrorResult { errorCode message }
-        }
-      }`,
-      variables: { lineId },
-    }),
-  });
-
-  const setCookie = res.headers.get('set-cookie');
-  const json = (await res.json()) as any;
-
-  const isFormPost = !ct.includes('application/json');
-  if (isFormPost) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: '/cart', ...(setCookie ? { 'set-cookie': setCookie } : {}) },
+    return new Response(JSON.stringify({ message: 'Invalid payload' }), {
+      status: 400, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
     });
   }
 
-  return new Response(JSON.stringify(json?.data?.removeOrderLine ?? json), {
-    status: 200,
-    headers: { 'content-type': 'application/json', ...(setCookie ? { 'set-cookie': setCookie } : {}) },
+  const vendureRes = await fetch(SHOP_API_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      cookie: request.headers.get('cookie') ?? '',
+    },
+    body: JSON.stringify({ query: MUTATION_REMOVE, variables: { orderLineId: lineId } }),
   });
+
+  const set = vendureRes.headers.get('set-cookie') || '';
+  const s = extract(set, 'session');
+  const sig = extract(set, 'session.sig');
+
+  const headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-store' });
+  if (s) headers.append('set-cookie', buildCookie('session', s));
+  if (sig) headers.append('set-cookie', buildCookie('session.sig', sig));
+
+  const json = await vendureRes.json().catch(() => ({}));
+  const payload = json?.data?.removeOrderLine ?? json;
+
+  return new Response(JSON.stringify(payload), { status: 200, headers });
 };

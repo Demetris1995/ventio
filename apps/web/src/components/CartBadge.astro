@@ -1,290 +1,181 @@
 ---
 /**
- * Modern navigation header with enhanced styling
+ * Cart badge component that shows live cart count and provides cart access
  */
 ---
 
 <style>
-  .header {
+  .cart-badge {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
     z-index: 1000;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--gray-200);
-    transition: all 0.3s ease;
-  }
-
-  .header.scrolled {
-    background: rgba(255, 255, 255, 0.98);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  }
-
-  .nav-container {
-    max-width: var(--container);
-    margin: 0 auto;
-    padding: 0 1.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 70px;
-  }
-
-  .logo {
-    font-size: 1.8rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: transform 0.3s ease;
-  }
-
-  .logo:hover {
-    transform: scale(1.05);
-  }
-
-  .logo::before {
-    content: '🛍️';
-    font-size: 1.5rem;
-    filter: none;
-    -webkit-text-fill-color: initial;
-  }
-
-  .nav-links {
-    display: flex;
-    list-style: none;
-    gap: 2rem;
-    align-items: center;
-  }
-
-  .nav-links a {
-    text-decoration: none;
-    color: var(--gray-700);
-    font-weight: 500;
-    position: relative;
-    transition: all 0.3s ease;
-    padding: 0.5rem 0;
-  }
-
-  .nav-links a:hover {
-    color: var(--primary);
-    transform: translateY(-1px);
-  }
-
-  .nav-links a::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--primary), var(--accent));
-    transition: width 0.3s ease;
-  }
-
-  .nav-links a:hover::after {
-    width: 100%;
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .search-toggle {
-    background: none;
-    border: none;
-    color: var(--gray-600);
-    font-size: 1.2rem;
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-  }
-
-  .search-toggle:hover {
-    background: var(--gray-100);
-    color: var(--primary);
-  }
-
-  .mobile-menu-toggle {
-    display: none;
-    background: none;
-    border: none;
-    color: var(--gray-700);
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: 0.5rem;
-  }
-
-  .mobile-nav {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: white;
-    border-bottom: 1px solid var(--gray-200);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  }
-
-  .mobile-nav.open {
-    display: block;
-    animation: slideDown 0.3s ease;
-  }
-
-  .mobile-nav-links {
-    list-style: none;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: 50px;
     padding: 1rem;
-  }
-
-  .mobile-nav-links a {
-    display: block;
-    padding: 0.75rem 0;
-    color: var(--gray-700);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: none;
+    color: white;
+    min-width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
     text-decoration: none;
-    border-bottom: 1px solid var(--gray-100);
-    transition: color 0.3s ease;
   }
 
-  .mobile-nav-links a:hover {
+  .cart-badge:hover {
+    transform: translateY(-50%) scale(1.05);
+    box-shadow: 0 12px 35px rgba(99, 102, 241, 0.5);
+  }
+
+  .cart-badge.loading {
+    opacity: 0.7;
+    animation: pulse 1.5s infinite;
+  }
+
+  .cart-count {
+    background: rgba(255, 255, 255, 0.9);
     color: var(--primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    min-width: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
   }
 
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  .cart-count.updated {
+    animation: bounce 0.6s ease;
   }
 
+  .cart-empty {
+    opacity: 0.6;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes bounce {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-5px); }
+    60% { transform: translateY(-3px); }
+  }
+
+  /* Hide on mobile to avoid interference with touch scrolling */
   @media (max-width: 768px) {
-    .nav-links {
-      display: none;
+    .cart-badge {
+      top: auto;
+      bottom: 20px;
+      right: 20px;
+      transform: none;
+      padding: 0.75rem;
     }
-    
-    .mobile-menu-toggle {
-      display: block;
-    }
-    
-    .search-toggle {
-      display: none;
+
+    .cart-badge:hover {
+      transform: scale(1.05);
     }
   }
 </style>
 
-<header class="header" id="header">
-  <div class="nav-container">
-    <a class="logo" href="/">Ventio</a>
-    
-    <nav>
-      <ul class="nav-links">
-        <li><a href="/">Home</a></li>
-        <li><a href="/#products">Products</a></li>
-        <li><a href="/cart">Cart</a></li>
-        <li><a href="/checkout">Checkout</a></li>
-      </ul>
-    </nav>
-
-    <div class="header-actions">
-      <button class="search-toggle" type="button" title="Search">
-        🔍
-      </button>
-      
-      <button class="mobile-menu-toggle" id="mobile-menu-toggle" type="button" aria-label="Toggle mobile menu">
-        ☰
-      </button>
-    </div>
-  </div>
-
-  <!-- Mobile Navigation -->
-  <div class="mobile-nav" id="mobile-nav">
-    <ul class="mobile-nav-links">
-      <li><a href="/">Home</a></li>
-      <li><a href="/#products">Products</a></li>
-      <li><a href="/cart">Cart</a></li>
-      <li><a href="/checkout">Checkout</a></li>
-    </ul>
-  </div>
-</header>
+<a href="/cart" class="cart-badge" id="cart-badge" title="View Cart">
+  <span>🛒</span>
+  <span class="cart-count" id="cart-count">0</span>
+</a>
 
 <script>
-  // Header scroll effect
-  function handleScroll() {
-    const header = document.getElementById('header');
-    if (window.scrollY > 10) {
-      header.classList.add('scrolled');
-    } else {
-      header.classList.remove('scrolled');
+  class CartBadge {
+    constructor() {
+      this.badge = document.getElementById('cart-badge');
+      this.countElement = document.getElementById('cart-count');
+      this.currentCount = 0;
+      
+      this.init();
     }
-  }
 
-  // Mobile menu toggle
-  function setupMobileMenu() {
-    const toggle = document.getElementById('mobile-menu-toggle');
-    const nav = document.getElementById('mobile-nav');
-    
-    if (toggle && nav) {
-      toggle.addEventListener('click', () => {
-        nav.classList.toggle('open');
-        toggle.textContent = nav.classList.contains('open') ? '✕' : '☰';
-      });
+    async init() {
+      await this.updateCount();
+      this.setupGlobalTrigger();
+      
+      // Update count periodically (in case of changes in other tabs)
+      setInterval(() => this.updateCount(), 30000);
+    }
 
-      // Close mobile menu when clicking outside
-      document.addEventListener('click', (e) => {
-        if (!toggle.contains(e.target) && !nav.contains(e.target)) {
-          nav.classList.remove('open');
-          toggle.textContent = '☰';
-        }
-      });
-
-      // Close mobile menu when clicking on a link
-      nav.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => {
-          nav.classList.remove('open');
-          toggle.textContent = '☰';
+    async updateCount() {
+      try {
+        this.badge?.classList.add('loading');
+        
+        const response = await fetch('/api/cart/count', {
+          credentials: 'include',
+          cache: 'no-cache'
         });
-      });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const { count } = await response.json();
+        this.setCount(count || 0);
+        
+      } catch (error) {
+        console.error('Failed to update cart count:', error);
+        // Don't show error to user for cart count failures
+      } finally {
+        this.badge?.classList.remove('loading');
+      }
+    }
+
+    setCount(newCount) {
+      const count = Math.max(0, parseInt(newCount) || 0);
+      
+      if (count !== this.currentCount) {
+        this.currentCount = count;
+        
+        if (this.countElement) {
+          this.countElement.textContent = count.toString();
+          this.countElement.classList.add('updated');
+          
+          // Remove animation class after animation completes
+          setTimeout(() => {
+            this.countElement.classList.remove('updated');
+          }, 600);
+        }
+        
+        // Update badge appearance
+        if (count === 0) {
+          this.badge?.classList.add('cart-empty');
+          this.badge?.setAttribute('title', 'Cart is empty');
+        } else {
+          this.badge?.classList.remove('cart-empty');
+          this.badge?.setAttribute('title', `View Cart (${count} item${count !== 1 ? 's' : ''})`);
+        }
+      }
+    }
+
+    setupGlobalTrigger() {
+      // Set up global function for other components to trigger cart updates
+      window.triggerCartUpdate = () => {
+        this.updateCount();
+      };
     }
   }
 
-  // Smooth scroll for anchor links
-  function setupSmoothScroll() {
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-          const headerHeight = 70;
-          const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - headerHeight;
-          
-          window.scrollTo({
-            top: targetPosition,
-            behavior: 'smooth'
-          });
-        }
-      });
-    });
-  }
-
-  // Initialize everything
+  // Initialize when DOM is ready
   document.addEventListener('DOMContentLoaded', () => {
-    handleScroll();
-    setupMobileMenu();
-    setupSmoothScroll();
-    
-    window.addEventListener('scroll', handleScroll);
+    new CartBadge();
   });
+
+  // Also initialize immediately if DOM is already loaded
+  if (document.readyState === 'loading') {
+    // DOM is still loading, wait for DOMContentLoaded
+  } else {
+    // DOM is already loaded
+    new CartBadge();
+  }
 </script>
