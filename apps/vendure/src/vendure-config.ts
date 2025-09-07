@@ -15,6 +15,8 @@ import {
   // defaultEmailHandlers,
 } from '@vendure/email-plugin';
 import { ManualPaymentHandler } from './payment/manual';
+import { MarketplacePlugin } from './plugins/marketplace/marketplace.plugin';
+
 
 console.log('DB ->', {
   host: process.env.DB_HOST,
@@ -42,6 +44,7 @@ export const config: VendureConfig = {
   authOptions: {
     // IMPORTANT: enable cookies so the storefront can keep a session
     tokenMethod: ['cookie', 'bearer'],
+    sessionDuration: '30d',
     cookieOptions: {
       // dev-friendly cookie settings (works across ports on localhost)
       sameSite: 'lax',
@@ -102,3 +105,8 @@ export const config: VendureConfig = {
     }),
   ],
 };
+
+MarketplacePlugin.use(config);
+
+export default config;
+

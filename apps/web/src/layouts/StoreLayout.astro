@@ -13,6 +13,8 @@ const {
 
 import Header from "../components/Header.astro";
 import CartBadge from "../components/CartBadge.astro";
+import "../styles/tailwind.css";
+
 
 const origin = Astro.site?.origin ?? "";
 const url = origin + Astro.url.pathname;
