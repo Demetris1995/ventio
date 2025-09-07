@@ -16,6 +16,8 @@ import {
 } from '@vendure/email-plugin';
 import { ManualPaymentHandler } from './payment/manual';
 import { MarketplacePlugin } from './plugins/marketplace/marketplace.plugin';
+import { GraphiqlPlugin } from '@vendure/graphiql-plugin';
+
 
 
 console.log('DB ->', {
@@ -103,10 +105,14 @@ export const config: VendureConfig = {
       route: 'admin', // http://localhost:3000/admin
       port: 3002,
     }),
+
+    GraphiqlPlugin.init({ route: 'graphiql' }), // optional; default is 'graphiql',
+
+    MarketplacePlugin.use()
+
   ],
 };
 
-MarketplacePlugin.use(config);
 
 export default config;
 

@@ -7,6 +7,7 @@
     "compose:down": "docker compose -f docker-compose.yml down -v"
   },
   "dependencies": {
+    "@vendure/graphiql-plugin": "^3.4.1",
     "bcrypt": "npm:bcryptjs@^3.0.2"
   },
   "pnpm": {

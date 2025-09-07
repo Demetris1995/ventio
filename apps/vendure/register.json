@@ -1,0 +1,10 @@
+{
+  "query": "mutation($input:RegisterSellerInput!){ registerSeller(input:$input){ sellerId channelId channelToken } }",
+  "variables": {
+    "input": {
+      "name": "Demo Seller",
+      "adminEmailAddress": "seller@ventio.local",
+      "adminPassword": "Passw0rd!"
+    }
+  }
+}

@@ -1,26 +1,21 @@
-import { gql } from 'graphql-tag';
+import gql from 'graphql-tag';
 
-export const adminApiExtensionsSchema = gql/* GraphQL */`
+export const schema = gql`
   extend type Mutation {
-    registerSeller(input: RegisterSellerInput!): RegisterSellerResult!
+    registerSeller(input: RegisterSellerInput!): RegisterSellerPayload!
   }
 
   input RegisterSellerInput {
-    sellerName: String!
-    adminEmail: String!
+    name: String!
+    adminEmailAddress: String!
     adminPassword: String!
-    adminFirstName: String!
-    adminLastName: String!
   }
 
-  type RegisterSellerResult {
+  type RegisterSellerPayload {
     sellerId: ID!
     channelId: ID!
     channelToken: String!
-    roleId: ID!
-    adminId: ID!
-    adminEmail: String!
-    stockLocationId: ID!
-    shippingMethodId: ID!
+    adminEmailAddress: String!
+    adminPassword: String!
   }
 `;
