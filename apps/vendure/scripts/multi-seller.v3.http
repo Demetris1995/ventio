@@ -1,0 +1,127 @@
+@ADMIN_API=http://localhost:3000/admin-api
+@SHOP_API=http://localhost:3000/shop-api
+# Replace with a valid Admin auth header if your Admin API is secured via bearer auth.
+@ADMIN_AUTH=Bearer REPLACE_ME
+
+### Admin login (cookie session)
+POST {{ADMIN_API}}
+Content-Type: application/json
+
+{
+  "query":"mutation { login(username:\"superadmin\", password:\"superadmin\") { ... on CurrentUser { id } ... on InvalidCredentialsError { message } } }"
+}
+
+
+###
+# 0) (Optional) Create Seller A
+POST {{ADMIN_API}}
+Authorization: {{ADMIN_AUTH}}
+Content-Type: application/json
+
+{
+  "query":"mutation($input: RegisterSellerInput!){ registerSeller(input:$input){ sellerId channelId channelToken } }",
+  "variables":{ "input": { "name":"Seller C", "adminEmailAddress":"seller.c@example.com", "adminPassword":"Password1!" } }
+}
+
+###
+# 1) (Optional) Create Seller B
+POST {{ADMIN_API}}
+Authorization: {{ADMIN_AUTH}}
+Content-Type: application/json
+
+{
+  "query":"mutation($input: RegisterSellerInput!){ registerSeller(input:$input){ sellerId channelId channelToken } }",
+  "variables":{ "input": { "name":"Seller B", "adminEmailAddress":"seller.b@example.com", "adminPassword":"Password1!" } }
+}
+
+###
+# Assign VARIANT_ID_SELLER_A_1 to CHANNEL_ID_A
+POST {{ADMIN_API}}
+Authorization: {{ADMIN_AUTH}}
+Content-Type: application/json
+
+{
+  "query": "mutation($input: AssignProductVariantsToChannelInput!) { assignProductVariantsToChannel(input: $input) { id name channels { id code } } }",
+  "variables": {
+    "input": {
+      "channelId": "CHANNEL_ID_A",
+      "productVariantIds": ["VARIANT_ID_SELLER_A_1"]
+    }
+  }
+}
+
+###
+POST {{ADMIN_API}}
+Authorization: {{ADMIN_AUTH}}
+Content-Type: application/json
+
+{
+  "query":"mutation($input: AssignProductVariantsToChannelInput!){ assignProductVariantsToChannel(input:$input){ result } }",
+  "variables":{
+    "input":{
+      "channelId":"CHANNEL_ID_B",
+      "productVariantIds":["VARIANT_ID_SELLER_B_1"]
+    }
+  }
+}
+
+###
+# 3) Start a cart on the Shop API and add one item from Seller A
+#    (Run these two with the **same client** so cookies persist)
+POST {{SHOP_API}}
+Content-Type: application/json
+
+{
+  "query":"mutation { addItemToOrder(productVariantId: VARIANT_ID_SELLER_A_1, quantity: 1) { ... on Order { id code } } }"
+}
+
+###
+# 4) Add one item from Seller B
+POST {{SHOP_API}}
+Content-Type: application/json
+
+{
+  "query":"mutation { addItemToOrder(productVariantId: VARIANT_ID_SELLER_B_1, quantity: 1) { ... on Order { id code } } }"
+}
+
+###
+# 5) Get eligible shipping methods per seller
+POST {{SHOP_API}}
+Content-Type: application/json
+
+{
+  "query":"{ eligibleMethodsBySeller { sellerChannelId sellerName quotes { id name priceWithTax } } }"
+}
+
+###
+# 6) Set shipping per seller (replace IDs with ones from step 5)
+POST {{SHOP_API}}
+Content-Type: application/json
+
+{
+  "query":"mutation($sel:[SellerShippingSelectionInput!]!){ setShippingPerSeller(selections:$sel){ id shippingLines { shippingMethod { code } priceWithTax } } }",
+  "variables":{
+    "sel":[
+      {"sellerChannelId":"CHANNEL_ID_A","shippingMethodId":"SM_ID_FOR_SELLER_A"},
+      {"sellerChannelId":"CHANNEL_ID_B","shippingMethodId":"SM_ID_FOR_SELLER_B"}
+    ]
+  }
+}
+
+###
+# 7) Transition to ArrangingPayment -> triggers platform fee listener
+POST {{SHOP_API}}
+Content-Type: application/json
+
+{
+  "query":"mutation { transitionOrderToState(state: ArrangingPayment) { ... on Order { id state } } }"
+}
+
+###
+# 8) Verify surcharges (should see one 10% fee per seller)
+POST {{SHOP_API}}
+Content-Type: application/json
+
+{
+  "query":"{ activeOrder { code state surcharges { description sku listPrice listPriceIncludesTax taxRate } } }"
+}
