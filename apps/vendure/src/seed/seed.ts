@@ -13,6 +13,8 @@ import {
   Product,
   ProductService,
   ProductVariantService,
+  ProductOptionGroupService,
+  ProductOptionService,
   RequestContext,
   RequestContextService,
   ShippingMethodService,
@@ -26,6 +28,7 @@ import {
 } from '@vendure/core';
 
 import { ManualPaymentHandler } from '../payment/manual';
+import { multivendorShippingEligibilityChecker } from '../plugins/multivendor/multivendor.plugin';
 const SELLER_ELIGIBILITY_CODE = 'multivendor-seller-only';
 
 type SellerSpec = {
@@ -60,6 +63,8 @@ export class SeedService {
 
     private readonly productService: ProductService,
     private readonly productVariantService: ProductVariantService,
+    private readonly productOptionGroupService: ProductOptionGroupService,
+    private readonly productOptionService: ProductOptionService,
     private readonly stockLocationService: StockLocationService,
     private readonly shippingMethodService: ShippingMethodService,
     private readonly paymentMethodService: PaymentMethodService,
@@ -71,7 +76,7 @@ export class SeedService {
   async seed(): Promise<void> {
     // Admin ctx on Default Channel
     const defaultChannel = await this.channelService.getDefaultChannel();
-    const ctx: RequestContext = await this.requestContextService.create({
+    let ctx: RequestContext = await this.requestContextService.create({
       apiType: 'admin',
       channelOrToken: defaultChannel,
       languageCode: LanguageCode.en,
@@ -84,13 +89,24 @@ export class SeedService {
       return;
     }
 
-    Logger.info('Seed: starting…');
+// inside seed()
+Logger.info('Seed: starting…');
 
-    // 1) Minimal tax setup
-    const { zone, taxCategoryId } = await this.ensureTaxSetup(ctx, defaultChannel);
+// 1) Minimal tax setup
+const { zone, taxCategoryId } = await this.ensureTaxSetup(ctx, defaultChannel);
 
-    // 2) Manual payment method on current channel
-    await this.ensureManualPaymentMethod(ctx);
+// 🔁 REFRESH CTX AFTER UPDATING CHANNEL TAX ZONE
+const updatedDefault = await this.channelService.getDefaultChannel();
+ctx = await this.requestContextService.create({
+  apiType: 'admin',
+  channelOrToken: updatedDefault.token,   // or pass the Channel object itself
+  languageCode: LanguageCode.en,
+});
+
+// 2) Manual payment method on Default Channel (manual)
+await this.ensureManualPaymentMethod(ctx);
+
+// ...rest of your seed (create sellers, products, variants, etc.) using this refreshed `ctx`
 
     // 3) Sellers spec
     const sellers: SellerSpec[] = [
@@ -250,7 +266,7 @@ private async createSellerWithData(
 await this.shippingMethodService.create(sellerCtx, {
   code: spec.shipping.code,
   checker: {
-    code: 'default-shipping-eligibility-checker', // ✅ built-in checker
+    code: multivendorShippingEligibilityChecker.code,
     arguments: [],
   },
   calculator: {
@@ -270,33 +286,68 @@ await this.shippingMethodService.create(sellerCtx, {
   ],
 });
 
-  // 4) Create products & variants, then assign to seller channel
-  for (const p of spec.products) {
-    const product = await this.productService.create(ctx, {
-      translations: [{
+// 4) Create products & variants directly in the seller channel context
+for (const p of spec.products) {
+  // create product in seller channel
+  const product = await this.productService.create(sellerCtx, {
+    translations: [
+      {
         languageCode: LanguageCode.en,
         name: p.name,
         slug: p.slug,
         description: p.description ?? '',
-      }],
+      },
+    ],
+  });
+
+  // If multiple variants, set up one OptionGroup with one Option per variant (to avoid duplicate-combo error)
+  let optionIdByVariantIndex: ID[] = [];
+  if (p.variants.length > 1) {
+    const group = await this.productOptionGroupService.create(sellerCtx, {
+      code: `${p.slug}-group`,
+      translations: [{ languageCode: LanguageCode.en, name: 'Option' }],
     });
 
-    await this.productVariantService.create(ctx, p.variants.map(v => ({
+    const options: ID[] = [];
+    for (const v of p.variants) {
+      const opt = await this.productOptionService.create(
+        sellerCtx,
+        group.id as ID,
+        {
+          code: (v.name ?? v.sku).toString().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          translations: [{ languageCode: LanguageCode.en, name: v.name ?? v.sku }],
+        }
+      );
+      options.push(opt.id as ID);
+    }
+
+    await this.productService.addOptionGroupToProduct(sellerCtx, product.id as ID, group.id as ID);
+    optionIdByVariantIndex = options;
+  }
+
+  const variantInputs = p.variants.map((v, idx) => {
+    const base: any = {
       productId: product.id as ID,
       sku: v.sku,
       price: v.price,
       stockOnHand: v.stockOnHand,
       translations: [{ languageCode: LanguageCode.en, name: v.name ?? p.name }],
       taxCategoryId,
-    })));
+    };
+    if (optionIdByVariantIndex.length > 0) {
+      base.optionIds = [optionIdByVariantIndex[idx]];
+    }
+    return base;
+  });
 
-    const createdVariants = await this.productVariantService.getVariantsByProductId(ctx, product.id as ID);
+  await this.productVariantService.create(sellerCtx, variantInputs);
 
-    await this.productVariantService.assignProductVariantsToChannel(ctx, {
-      channelId: sellerChannel.id as ID,
-      productVariantIds: createdVariants.items.map(vv => vv.id as ID),
-    });
-  }
+  // ❌ Do NOT cross-assign here; creating in sellerCtx already attaches them to that channel.
+  // If you later want them visible in Default Channel too, you can:
+  // - assign via Admin UI, or
+  // - extend the seed with a true superadmin RequestContext and call assignProductVariantsToChannel there.
+
+}
 
   return sellerChannel;
 }

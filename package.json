@@ -2,10 +2,14 @@
   "name": "ventio",
   "private": true,
   "scripts": {
-    "dev": "pnpm -w run compose:up && pnpm -w --parallel -r run dev",
-    "compose:up": "docker compose -f docker-compose.yml up -d",
-    "compose:down": "docker compose -f docker-compose.yml down -v"
-  },
+    "dev": "ts-node --transpile-only src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "migration:generate": "ts-node migration.ts generate",
+    "migration:run": "ts-node migration.ts run",
+    "migration:revert": "ts-node migration.ts revert"
+  }
+,
   "dependencies": {
     "@vendure/graphiql-plugin": "^3.4.1",
     "bcrypt": "npm:bcryptjs@^3.0.2"
@@ -14,5 +18,6 @@
     "overrides": {
       "bcrypt": "npm:bcryptjs@^3.0.2"
     }
-  }
+  },
+  "packageManager": "pnpm@9.15.9+sha512.68046141893c66fad01c079231128e9afb89ef87e2691d69e4d40eee228988295fd4682181bae55b58418c3a253bde65a505ec7c5f9403ece5cc3cd37dcf2531"
 }
