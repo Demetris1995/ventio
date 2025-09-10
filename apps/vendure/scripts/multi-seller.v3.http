@@ -1,127 +1,186 @@
-@ADMIN_API=http://localhost:3000/admin-api
-@SHOP_API=http://localhost:3000/shop-api
-# Replace with a valid Admin auth header if your Admin API is secured via bearer auth.
-@ADMIN_AUTH=Bearer REPLACE_ME
+@HOST = http://localhost:3000
+@ADMIN_API = {{HOST}}/admin-api
+@SHOP_API  = {{HOST}}/shop-api
 
-### Admin login (cookie session)
+# ---- Linter-safe defaults (will be overwritten during runtime) ----
+@ADMIN_COOKIE=
+@SHOP_COOKIE=
+@CHANNEL_ID_DEFAULT=
+@CHANNEL_ID_A=
+@CHANNEL_ID_B=
+@VARIANT_ID_SELLER_A_1=
+@VARIANT_ID_SELLER_B_1=
+@SM_ID_FOR_SELLER_A=
+@SM_ID_FOR_SELLER_B=
+
+###
+# 0) ADMIN LOGIN (cookie session) — optional; used if you need to look up/assign channels & variants
 POST {{ADMIN_API}}
 Content-Type: application/json
 
 {
-  "query":"mutation { login(username:\"superadmin\", password:\"superadmin\") { ... on CurrentUser { id } ... on InvalidCredentialsError { message } } }"
+  "query":"mutation { login(username:\"superadmin\", password:\"superadmin\") { __typename ... on CurrentUser { id identifier } } }"
 }
 
+> {%
+const setCookie = response.headers.valueOf("set-cookie");
+if (setCookie) { client.global.set("ADMIN_COOKIE", setCookie); }
+%}
 
 ###
-# 0) (Optional) Create Seller A
+# 1) CHANNEL LOOKUP (Default + seller channels A/B). Adjust codes if needed.
 POST {{ADMIN_API}}
-Authorization: {{ADMIN_AUTH}}
 Content-Type: application/json
+Cookie: {{ADMIN_COOKIE}}
 
 {
-  "query":"mutation($input: RegisterSellerInput!){ registerSeller(input:$input){ sellerId channelId channelToken } }",
-  "variables":{ "input": { "name":"Seller C", "adminEmailAddress":"seller.c@example.com", "adminPassword":"Password1!" } }
+  "query": "{ channels(options:{take:100}) { items { id code token } } }"
 }
 
+> {%
+const channels = response.body?.data?.channels?.items ?? [];
+function find(code){ return channels.find(c => (c.code||'').toLowerCase() === code.toLowerCase()); }
+const defaultCh = find('default-channel') || find('default');
+const sellerA   = find('seller-a') || find('Seller A');
+const sellerB   = find('seller-b') || find('Seller B');
+if (defaultCh) client.global.set('CHANNEL_ID_DEFAULT', defaultCh.id);
+if (sellerA)   client.global.set('CHANNEL_ID_A', sellerA.id);
+if (sellerB)   client.global.set('CHANNEL_ID_B', sellerB.id);
+%}
+
 ###
-# 1) (Optional) Create Seller B
+# 2) (Optional) FIND VARIANTS FOR A & B BY SKU (edit search terms)
 POST {{ADMIN_API}}
-Authorization: {{ADMIN_AUTH}}
 Content-Type: application/json
+Cookie: {{ADMIN_COOKIE}}
 
 {
-  "query":"mutation($input: RegisterSellerInput!){ registerSeller(input:$input){ sellerId channelId channelToken } }",
-  "variables":{ "input": { "name":"Seller B", "adminEmailAddress":"seller.b@example.com", "adminPassword":"Password1!" } }
+  "query": "query($termA:String!,$termB:String!){ 
+    A: productVariants(options:{ filter:{ sku:{ contains:$termA } }, take:10 }) { items { id sku name channels{ code } } }
+    B: productVariants(options:{ filter:{ sku:{ contains:$termB } }, take:10 }) { items { id sku name channels{ code } } }
+  }",
+  "variables": { "termA": "SELLER-A", "termB": "SELLER-B" }
 }
 
+> {%
+const A = response.body?.data?.A?.items?.[0];
+const B = response.body?.data?.B?.items?.[0];
+if (A) client.global.set("VARIANT_ID_SELLER_A_1", A.id);
+if (B) client.global.set("VARIANT_ID_SELLER_B_1", B.id);
+%}
+
 ###
-# Assign VARIANT_ID_SELLER_A_1 to CHANNEL_ID_A
+# 3) (Optional) ASSIGN VARIANTS TO SELLER CHANNELS
 POST {{ADMIN_API}}
-Authorization: {{ADMIN_AUTH}}
 Content-Type: application/json
+Cookie: {{ADMIN_COOKIE}}
 
 {
-  "query": "mutation($input: AssignProductVariantsToChannelInput!) { assignProductVariantsToChannel(input: $input) { id name channels { id code } } }",
-  "variables": {
-    "input": {
-      "channelId": "CHANNEL_ID_A",
-      "productVariantIds": ["VARIANT_ID_SELLER_A_1"]
-    }
-  }
+  "query":"mutation($input: AssignProductVariantsToChannelInput!){ assignProductVariantsToChannel(input:$input){ __typename ... on ProductVariant { id name channels{ code } } } }",
+  "variables":{ "input":{ "channelId":"{{CHANNEL_ID_A}}", "productVariantIds":["{{VARIANT_ID_SELLER_A_1}}"] } }
 }
 
 ###
 POST {{ADMIN_API}}
-Authorization: {{ADMIN_AUTH}}
 Content-Type: application/json
+Cookie: {{ADMIN_COOKIE}}
 
 {
-  "query":"mutation($input: AssignProductVariantsToChannelInput!){ assignProductVariantsToChannel(input:$input){ result } }",
-  "variables":{
-    "input":{
-      "channelId":"CHANNEL_ID_B",
-      "productVariantIds":["VARIANT_ID_SELLER_B_1"]
-    }
-  }
+  "query":"mutation($input: AssignProductVariantsToChannelInput!){ assignProductVariantsToChannel(input:$input){ __typename ... on ProductVariant { id name channels{ code } } } }",
+  "variables":{ "input":{ "channelId":"{{CHANNEL_ID_B}}", "productVariantIds":["{{VARIANT_ID_SELLER_B_1}}"] } }
 }
 
 ###
-# 3) Start a cart on the Shop API and add one item from Seller A
-#    (Run these two with the **same client** so cookies persist)
+# 4) SHOP: INIT SESSION & CAPTURE SHOP COOKIE
 POST {{SHOP_API}}
 Content-Type: application/json
 
+{ "query": "{ activeOrder { id code state totalWithTax } }" }
+
+> {%
+const sc = response.headers.valueOf("set-cookie");
+if (sc) { client.global.set("SHOP_COOKIE", sc); }
+%}
+
+###
+# 5) ADD ITEMS (one from Seller A, one from Seller B)
+POST {{SHOP_API}}
+Content-Type: application/json
+Cookie: {{SHOP_COOKIE}}
+
 {
-  "query":"mutation { addItemToOrder(productVariantId: VARIANT_ID_SELLER_A_1, quantity: 1) { ... on Order { id code } } }"
+  "query":"mutation($id:ID!){ addItemToOrder(productVariantId:$id, quantity:1) { __typename ... on Order { id code } ... on ErrorResult { message } } }",
+  "variables": { "id": "{{VARIANT_ID_SELLER_A_1}}" }
 }
 
 ###
-# 4) Add one item from Seller B
 POST {{SHOP_API}}
 Content-Type: application/json
+Cookie: {{SHOP_COOKIE}}
 
 {
-  "query":"mutation { addItemToOrder(productVariantId: VARIANT_ID_SELLER_B_1, quantity: 1) { ... on Order { id code } } }"
+  "query":"mutation($id:ID!){ addItemToOrder(productVariantId:$id, quantity:1) { __typename ... on Order { id code } ... on ErrorResult { message } } }",
+  "variables": { "id": "{{VARIANT_ID_SELLER_B_1}}" }
 }
 
 ###
-# 5) Get eligible shipping methods per seller
+# 6) ELIGIBLE METHODS (standard) — you'll group per seller in the web UI
 POST {{SHOP_API}}
 Content-Type: application/json
+Cookie: {{SHOP_COOKIE}}
 
 {
-  "query":"{ eligibleMethodsBySeller { sellerChannelId sellerName quotes { id name priceWithTax } } }"
+  "query":"{ eligibleShippingMethods { id code name priceWithTax channels { id code } } }"
+}
+
+> {%
+const methods = response.body?.data?.eligibleShippingMethods ?? [];
+const defCode = 'default-channel';
+function firstForSeller(chId){ return methods.find(m => (m.channels||[]).some(c => c.id===chId && c.code!==defCode)); }
+const A = client.global.get('CHANNEL_ID_A');
+const B = client.global.get('CHANNEL_ID_B');
+const mA = firstForSeller(A); const mB = firstForSeller(B);
+if (mA) client.global.set('SM_ID_FOR_SELLER_A', mA.id);
+if (mB) client.global.set('SM_ID_FOR_SELLER_B', mB.id);
+%}
+
+###
+# 7) SET SHIPPING (array) — native v3 flow
+POST {{SHOP_API}}
+Content-Type: application/json
+Cookie: {{SHOP_COOKIE}}
+
+{
+  "query":"mutation($ids:[ID!]!){ setOrderShippingMethod(shippingMethodId:$ids){ __typename ... on Order { id state shippingLines { id priceWithTax shippingMethod { id code name } } } ... on ErrorResult { errorCode message } } }",
+  "variables": { "ids": ["{{SM_ID_FOR_SELLER_A}}","{{SM_ID_FOR_SELLER_B}}"] }
 }
 
 ###
-# 6) Set shipping per seller (replace IDs with ones from step 5)
+# 8) (Optional) TRANSITION TO ARRANGINGPAYMENT (fees already added by strategy after split)
 POST {{SHOP_API}}
 Content-Type: application/json
+Cookie: {{SHOP_COOKIE}}
 
 {
-  "query":"mutation($sel:[SellerShippingSelectionInput!]!){ setShippingPerSeller(selections:$sel){ id shippingLines { shippingMethod { code } priceWithTax } } }",
-  "variables":{
-    "sel":[
-      {"sellerChannelId":"CHANNEL_ID_A","shippingMethodId":"SM_ID_FOR_SELLER_A"},
-      {"sellerChannelId":"CHANNEL_ID_B","shippingMethodId":"SM_ID_FOR_SELLER_B"}
-    ]
-  }
+  "query":"mutation { transitionOrderToState(state: ArrangingPayment) { __typename ... on Order { id state } ... on OrderStateTransitionError { message } } }"
 }
 
 ###
-# 7) Transition to ArrangingPayment -> triggers platform fee listener
+# 9) VERIFY SURCHARGES
 POST {{SHOP_API}}
 Content-Type: application/json
+Cookie: {{SHOP_COOKIE}}
 
 {
-  "query":"mutation { transitionOrderToState(state: ArrangingPayment) { ... on Order { id state } } }"
+  "query":"{ activeOrder { code state subTotalWithTax shippingWithTax totalWithTax surcharges { id description sku listPrice listPriceIncludesTax taxRate } } }"
 }
 
 ###
-# 8) Verify surcharges (should see one 10% fee per seller)
+# 10) DEBUG: CURRENT ORDER SNAPSHOT
 POST {{SHOP_API}}
 Content-Type: application/json
+Cookie: {{SHOP_COOKIE}}
 
 {
-  "query":"{ activeOrder { code state surcharges { description sku listPrice listPriceIncludesTax taxRate } } }"
+  "query":"{ activeOrder { id code channels{ code } lines{ id quantity productVariant{ id name } } shippingLines{ id shippingMethod{ code } priceWithTax } } }"
 }

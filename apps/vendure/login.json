@@ -1,3 +1,0 @@
-{
-  "query": "mutation { login(username:\"superadmin\", password:\"superadmin\") { ... on CurrentUser { id identifier } ... on ErrorResult { errorCode message } } }"
-}

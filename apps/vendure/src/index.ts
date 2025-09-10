@@ -1,6 +1,17 @@
-import 'dotenv/config';
 import 'reflect-metadata';
-import { bootstrap } from '@vendure/core';
+import 'dotenv/config';
+import { bootstrap, runMigrations } from '@vendure/core';
 import { config } from './vendure-config';
 
-bootstrap(config).catch(console.error);
+async function start() {
+  // Run pending migrations first
+  await runMigrations(config);
+  // Then start the server
+  await bootstrap(config);
+}
+
+start().catch(err => {
+  // eslint-disable-next-line no-console
+  console.error(err);
+  process.exit(1);
+});

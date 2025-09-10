@@ -35,7 +35,6 @@ Create two files:
 
 apps/vendure/.env
 -----------------
-```
 DB_HOST=db
 DB_PORT=5432
 DB_NAME=ventio_dev
@@ -56,13 +55,10 @@ SMTP_HOST=mailhog
 SMTP_PORT=1025
 
 TYPEORM_SYNCHRONIZE=false
-```
 
 apps/web/.env
 -------------
-```
 PUBLIC_SHOP_API_URL=http://localhost:3000/shop-api
-```
 
 2) Start everything
 -------------------
@@ -70,7 +66,6 @@ If your repo already has a compose file, use it. If not, create docker-compose.y
 
 docker-compose.yml
 ------------------
-```
 version: "3.9"
 services:
   db:
@@ -116,90 +111,59 @@ services:
 
 volumes:
   pgdata:
-```
-
-Also add two dev Dockerfiles (very small):
-
-apps/vendure/Dockerfile.dev
----------------------------
-```
-FROM node:20
-RUN corepack enable && corepack prepare pnpm@latest --activate
-WORKDIR /workspace
-COPY package.json pnpm-lock.yaml ./
-COPY apps/vendure/package.json apps/vendure/
-COPY apps/web/package.json apps/web/
-RUN pnpm install --frozen-lockfile
-COPY . .
-WORKDIR /workspace/apps/vendure
-EXPOSE 3000
-```
-
-apps/web/Dockerfile.dev
------------------------
-```
-FROM node:20
-RUN corepack enable && corepack prepare pnpm@latest --activate
-WORKDIR /workspace
-COPY package.json pnpm-lock.yaml ./
-COPY apps/web/package.json apps/web/
-COPY apps/vendure/package.json apps/vendure/
-RUN pnpm install --frozen-lockfile
-COPY . .
-WORKDIR /workspace/apps/web
-EXPOSE 4321
-```
 
 Run:
-```
 docker compose up --build
-```
 
 3) Run DB migrations (first time only)
 --------------------------------------
-Keep a second terminal open and run:
-```
+In another terminal:
 docker compose exec vendure sh -lc "pnpm run migration:run"
-```
 
 (Any time you change entities/customFields, generate & run a migration:
-`pnpm run migration:generate -- --name my-change` then `migration:run`.)
+pnpm run migration:generate -- --name my-change
+pnpm run migration:run)
 
 4) Open the app
 ---------------
-- Storefront:  http://localhost:4321
-- Shop API:    http://localhost:3000/shop-api
-- Admin API:   http://localhost:3000/admin-api
-- MailHog UI:  http://localhost:8025
+- Admin UI (dashboard):  http://localhost:3000/admin
+- Storefront:            http://localhost:4321
+
+Note: /shop-api and /admin-api are **API endpoints** (GraphQL over HTTP). They are not meant to render in the browser. Use the scripts below, Postman/Insomnia, curl, or VS Code REST Client to call them.
+
+Quick curl examples:
+- Shop API introspection (example):
+  curl -sS http://localhost:3000/shop-api -H "Content-Type: application/json" \
+    -d "{\"query\":\"{ currentChannel { id code } }\"}"
+
+- Admin login + use token (example):
+  1) TOKEN=$(curl -sS http://localhost:3000/admin-api -H "Content-Type: application/json" \
+       -d "{\"query\":\"mutation{ login(username:\\\"superadmin\\\",password:\\\"Password1!\\\"){ __typename ... on CurrentUser { id } } }\"}" | jq -r '.data.login')  # or use scripts below
+  2) Use REST Client script instead (easier).
 
 5) Quick multi-seller test (optional)
 -------------------------------------
-- Open `scripts/multi-seller.v3.http` in VS Code (REST Client).
-- Run blocks top-to-bottom to:
-  - create two sellers
-  - assign a variant to each seller channel
-  - add both variants to one cart
-  - get `eligibleMethodsBySeller`
-  - call `setShippingPerSeller`
-  - transition to `ArrangingPayment` and see “Platform fee (10%)” surcharges
+Open scripts/multi-seller.v3.http in VS Code (REST Client) and run the blocks to:
+- create two sellers
+- assign a variant to each seller channel
+- add both variants to one cart
+- get eligibleMethodsBySeller
+- setShippingPerSeller
+- transition to ArrangingPayment and see “Platform fee (10%)” surcharges
 
 6) Common fixes
 ---------------
-- CORS error from web → shop: check `CORS_ORIGIN=http://localhost:4321`, restart vendure.
+- CORS error (web → shop): check CORS_ORIGIN=http://localhost:4321, restart vendure.
 - Empty shipping methods: ensure each seller channel has a Shipping Method assigned.
-- No platform fee: call mutation `transitionOrderToState(state: ArrangingPayment)` after setting shipping.
+- No platform fee: transition order to ArrangingPayment after setting shipping.
 
 7) Workspace essentials
 -----------------------
 Keep these at the repo root:
 
 pnpm-workspace.yaml
-```
 packages:
   - 'apps/*'
   - 'packages/*'
-```
 
 Also keep: pnpm-lock.yaml, .gitignore, .dockerignore, README.txt
-
-Done. That’s all you need to get running.

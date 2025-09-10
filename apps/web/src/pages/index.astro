@@ -6,6 +6,29 @@ import StoreLayout from "../layouts/StoreLayout.astro";
 import Hero from "../components/Hero.astro";
 import ProductCard from "../components/ProductCard.astro";
 
+// ===== Types =====
+type Variant = {
+  id: string;
+  name: string;
+  priceWithTax: number;
+  currencyCode: string;
+  stockLevel: string;
+};
+type Product = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  featuredAsset?: { preview: string } | null;
+  variants: Variant[];
+};
+type HomeProductsData = {
+  products: {
+    items: Product[];
+    totalItems: number;
+  };
+};
+
 // Forward the browser session cookie to Vendure during SSR
 const cookieHeader = Astro.request.headers.get('cookie') ?? '';
 
@@ -21,7 +44,7 @@ const client = new ApolloClient({
   cache: new InMemoryCache(),
 });
 
-const { data } = await client.query({
+const { data } = await client.query<HomeProductsData>({
   query: gql`
     query HomeProducts {
       products(options: { take: 12, sort: { createdAt: DESC } }) {
@@ -30,9 +53,7 @@ const { data } = await client.query({
           slug
           name
           description
-          featuredAsset { 
-            preview 
-          }
+          featuredAsset { preview }
           variants {
             id
             name
@@ -48,8 +69,8 @@ const { data } = await client.query({
   fetchPolicy: "no-cache",
 });
 
-const products = data?.products?.items ?? [];
-const totalProducts = data?.products?.totalItems ?? 0;
+const products: Product[] = data?.products?.items ?? [];
+const totalProducts: number = data?.products?.totalItems ?? 0;
 ---
 
 <StoreLayout 
@@ -86,7 +107,7 @@ const totalProducts = data?.products?.totalItems ?? 0;
         gap: 2rem;
         margin-bottom: 3rem;
       ">
-        {products.map((product, index) => (
+        {products.map((product: Product, index: number) => (
           <ProductCard product={product} index={index} />
         ))}
       </div>
@@ -339,57 +360,61 @@ const totalProducts = data?.products?.totalItems ?? 0;
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     // Setup load more functionality
-    const loadMoreBtn = document.querySelector('.load-more-btn');
+    const loadMoreBtn = document.querySelector('.load-more-btn') as HTMLAnchorElement | null;
     if (loadMoreBtn) {
-      loadMoreBtn.addEventListener('click', async (e) => {
+      loadMoreBtn.addEventListener('click', async (e: MouseEvent) => {
         e.preventDefault();
-        
-        const originalText = loadMoreBtn.textContent;
-        loadMoreBtn.textContent = '⏳ Loading...';
-        loadMoreBtn.style.pointerEvents = 'none';
-        
+
+        const btn = e.currentTarget as HTMLAnchorElement | null;
+        if (!btn) return;
+
+        const originalText = btn.textContent || '';
+        btn.textContent = '⏳ Loading...';
+        btn.style.pointerEvents = 'none';
+
         try {
-          // Simulate loading more products (you can implement actual pagination here)
+          // Simulate loading more products (implement actual pagination here)
           await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          window.showNotification?.('More products coming soon!', 'success');
-          loadMoreBtn.textContent = 'Coming Soon';
-          
-        } catch (error) {
-          loadMoreBtn.textContent = originalText;
-          loadMoreBtn.style.pointerEvents = 'auto';
-          window.showNotification?.('Failed to load more products', 'error');
+          (window as any).showNotification?.('More products coming soon!', 'success');
+          btn.textContent = 'Coming Soon';
+        } catch {
+          btn.textContent = originalText;
+          btn.style.pointerEvents = 'auto';
+          (window as any).showNotification?.('Failed to load more products', 'error');
         }
       });
     }
 
     // Setup newsletter form
-    const newsletterForm = document.querySelector('.newsletter-form');
+    const newsletterForm = document.querySelector('.newsletter-form') as HTMLFormElement | null;
     if (newsletterForm) {
-      newsletterForm.addEventListener('submit', async (e) => {
+      newsletterForm.addEventListener('submit', async (e: SubmitEvent) => {
         e.preventDefault();
-        
-        const email = e.target.querySelector('input[type="email"]').value;
-        const button = e.target.querySelector('button');
-        
+
+        const form = e.currentTarget as HTMLFormElement | null;
+        if (!form) return;
+
+        const emailInput = form.querySelector('input[type="email"]') as HTMLInputElement | null;
+        const button = form.querySelector('button') as HTMLButtonElement | null;
+        const email = emailInput?.value?.trim();
+
         if (!email) {
-          window.showNotification?.('Please enter your email address', 'error');
+          (window as any).showNotification?.('Please enter your email address', 'error');
           return;
         }
 
-        const originalText = button.textContent;
+        if (!button) return;
+        const originalText = button.textContent || '';
         button.textContent = 'Subscribing...';
         button.disabled = true;
-        
+
         try {
           // Simulate newsletter subscription (implement your actual logic here)
           await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          window.showNotification?.('Thanks for subscribing! 🎉', 'success');
-          e.target.reset();
-          
-        } catch (error) {
-          window.showNotification?.('Subscription failed. Please try again.', 'error');
+          (window as any).showNotification?.('Thanks for subscribing! 🎉', 'success');
+          form.reset();
+        } catch {
+          (window as any).showNotification?.('Subscription failed. Please try again.', 'error');
         } finally {
           button.textContent = originalText;
           button.disabled = false;
@@ -398,7 +423,7 @@ const totalProducts = data?.products?.totalItems ?? 0;
     }
 
     // Enhanced scroll animations
-    const observerOptions = {
+    const observerOptions: IntersectionObserverInit = {
       threshold: 0.1,
       rootMargin: '0px 0px -50px 0px'
     };
@@ -406,9 +431,10 @@ const totalProducts = data?.products?.totalItems ?? 0;
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry, index) => {
         if (entry.isIntersecting) {
+          const el = entry.target as HTMLElement;
           setTimeout(() => {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'translateY(0)';
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
           }, index * 100);
           observer.unobserve(entry.target);
         }
@@ -416,7 +442,8 @@ const totalProducts = data?.products?.totalItems ?? 0;
     }, observerOptions);
 
     // Observe all elements with data-animate attribute
-    document.querySelectorAll('[data-animate]').forEach(el => {
+    document.querySelectorAll('[data-animate]').forEach((node) => {
+      const el = node as HTMLElement;
       el.style.opacity = '0';
       el.style.transform = 'translateY(30px)';
       el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
